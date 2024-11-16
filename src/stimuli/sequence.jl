@@ -21,7 +21,7 @@ A named tuple containing the following fields:
 
 """
 function generate_lexicon(config)
-    @unpack ph_duration, dictionary = config
+    @unpack ph_duration, dictionary, add_space = config
 
     all_words = collect(keys(dictionary)) |> Set |> collect |> sort |> Vector{Symbol}
     all_phonemes = collect(values(dictionary)) |> Iterators.flatten |> Set |> collect |> sort |> Vector{Symbol}
@@ -45,6 +45,16 @@ function generate_lexicon(config)
     silence = length(symbols) + 1
     push!(mapping, silence => silence_symbol)
     push!(r_mapping, silence_symbol => silence)
+
+    # Add the phoneme space symbol
+    if add_space
+        for (n, s) in enumerate(all_words)
+            n = n + length(symbols) + 2
+            ph_space_symbol = Symbol("_" * string(s))  # Get the matching symbol for ph
+            push!(mapping, n => ph_space_symbol)
+            push!(r_mapping, ph_space_symbol => n)
+        end
+    end
 
     return (id2string = mapping, 
             string2id = r_mapping, 
@@ -85,14 +95,16 @@ function generate_sequence(lexicon, config, seed=nothing)
         Random.seed!(seed)
     end 
 
-    @unpack seq_length = config
+    @unpack seq_length, ph_space_duration = config
     @unpack dict, id2string, string2id, symbols, silence_symbol, ph_duration = lexicon
     silent_intervals = 1
+    if !isnothing(ph_space_duration) add_space = true end
     words, phonemes = generate_random_word_sequence(
         seq_length,
         dict,
         silence_symbol,
-        silent_intervals=silent_intervals;
+        silent_intervals=silent_intervals,
+        add_space=add_space;
     )
 
     ## create the populations
@@ -106,14 +118,26 @@ function generate_sequence(lexicon, config, seed=nothing)
         for (n, (w, p)) in enumerate(zip(words, phonemes))
             sequence[1, 1+n] = string2id[w]
             sequence[2, 1+n] = string2id[p]
-            sequence[3, 1+n] = ph_duration[p]
+            if !isnothing(ph_space_duration) && p in keys(ph_space_duration)
+                min, max = ph_space_duration[p]
+                space_duration = rand(min:max)
+                sequence[3, 1+n] = space_duration
+            else
+                sequence[3, 1+n] = ph_duration[p]
+            end
         end
     else
         sequence = fill(silence, 3, seq_length)
         for (n, (w, p)) in enumerate(zip(words, phonemes))
             sequence[1, n] = string2id[w]
             sequence[2, n] = string2id[p]
-            sequence[3, n] = ph_duration[p]
+            if !isnothing(ph_space_duration) && p in keys(ph_space_duration)
+                min, max = ph_space_duration[p]
+                space_duration = rand(min:max)
+                sequence[3, 1+n] = space_duration
+            else
+                sequence[3, 1+n] = ph_duration[p]
+            end
         end
     end
 
@@ -139,7 +163,7 @@ Given a sign symbol and a sequence, this function identifies the line of the seq
 
 # Example
 """
-function sign_intervals(sign::Symbol, sequence)
+function sign_intervals(sign::Symbol, sequence, time::Float32=0.f0)
     @unpack dict, id2string, string2id, sequence, symbols, line_id = sequence
     ## Identify the line of the sequence that contains the sign
     sign_line_id = -1
@@ -259,7 +283,7 @@ function generate_random_word_sequence(
     silence_symbol::Symbol;
     silent_intervals = 1,
     weights = nothing,
-    vot_duration = nothing,
+    add_space=false
 )
     dict_words = collect(keys(dictionary))
 
@@ -285,7 +309,7 @@ function generate_random_word_sequence(
         if should_fill_with_silence(word_phonemes, silent_intervals, sequence_length, length(words))
             fill_with_silence!(words, phonemes, silence_symbol, sequence_length - length(words))
         else
-            append_word_and_phonemes!(words, phonemes, current_word, word_phonemes, silence_symbol, silent_intervals)
+            append_word_and_phonemes!(words, phonemes, current_word, word_phonemes, silence_symbol, silent_intervals, add_space)
         end
     end
 
@@ -365,11 +389,18 @@ Arguments:
 - `silence_symbol`: The symbol representing silence.
 - `silent_intervals`: The number of silent intervals to append after the word.
 """
-function append_word_and_phonemes!(words, phonemes, word, phonemes_list, silence_symbol, silent_intervals)
-    for ph in phonemes_list
+function append_word_and_phonemes!(words, phonemes, word, phonemes_list, silence_symbol, silent_intervals, add_space)
+    for (i, ph) in enumerate(phonemes_list)
         push!(phonemes, ph)
         push!(words, word)
+        
+        # Only add space if the phoneme is not the last one in the list
+        if add_space && i < length(phonemes_list)
+            push!(phonemes, Symbol("_" * string(word)))
+            push!(words, word)
+        end
     end
+    
 
     for _ = 1:silent_intervals
         push!(words, silence_symbol)
