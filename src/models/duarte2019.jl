@@ -5,31 +5,56 @@ duarte2019 = (
         El = -64.33mV,
         Vt = -38.97mV,
         Vr = -57.47mV,
-        τabs = 0.5ms, # CHANGED 0.42ms
+        τabs = 0.42ms,
         τre = 0.18ms,
         τde = 0.70ms,
-        τri = 0.19ms, # CHANGED 0.2ms
+        τri = 0.2ms,
         τdi = 2.50ms,
-        gsyn_e = 1.04nS, # ADDED 
-        gsyn_i = 0.84nS, # ADDED 
-
     ),
     SST = SNN.IFParameterGsyn(
         τm = 102.86pF / 4.61nS,
         El = -61mV,
         Vt = -34.4mV,
         Vr = -47.11mV,
-        τabs = 1.3ms, # CHANGED 1.34ms
+        τabs = 1.34ms,
         τre = 0.18ms,
         τde = 1.80ms,
         τri = 0.19ms,
         τdi = 5.00ms,
-        gsyn_e = 0.56nS, # CHANGED 0.8
-        gsyn_i = 0.59nS, # CHANGED 0.7
-        a = 144nS,
-        b = 80.5pA,       #(pA) 'sra' current increment
-        τw = 4ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
+        gsyn_e = 0.8,
+        gsyn_i = 0.7,
+        b = 80.5,       #(pA) 'sra' current increment
+        τw = 144,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     ),
+    # PV = SNN.IFParameterGsyn(
+    #     τm = 104.52pF / 9.75nS,
+    #     El = -64.33mV,
+    #     Vt = -38.97mV,
+    #     Vr = -57.47mV,
+    #     τabs = 0.42ms, # CHANGED 0.5ms
+    #     τre = 0.18ms,
+    #     τde = 0.70ms,
+    #     τri = 0.19ms, # CHANGED 0.2ms
+    #     τdi = 2.50ms,
+    #     gsyn_e = 1.04nS, # ADDED
+    #     gsyn_i = 0.84nS, # ADDED
+    # ),
+    # SST = SNN.IFParameterGsyn(
+    #     τm = 102.86pF / 4.61nS,
+    #     El = -61mV,
+    #     Vt = -34.4mV,
+    #     Vr = -47.11mV,
+    #     τabs = 1.3ms, #  CHANGED 1.34ms
+    #     τre = 0.18ms,
+    #     τde = 1.80ms,
+    #     τri = 0.19ms,
+    #     τdi = 5.00ms,
+    #     gsyn_e = 0.56nS, # 0.56nS CHANGED 0.7
+    #     gsyn_i = 0.59nS, # 0.59nS CHANGED 0.8
+    #     a = 144nS, # ADDED  
+    #     b = 80.5pA, #(pA) 'sra' current increment # CHANGED 80.5
+    #     τw = 4ms, #(s) adaptation time constant (~Ca-activated K current inactivation) # CHANGED 144ms
+    # ),
     AdEx = AdExParameterGsyn(El = -76.43, 
                             τm = 116.5pF/ 4.64nS, 
                         Vt = -44.45, 

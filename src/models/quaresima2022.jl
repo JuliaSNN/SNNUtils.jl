@@ -16,9 +16,13 @@ KochGlu =
 Guy Eyal, Matthijs B. Verhoog, Guilherme Testa-Silva, Yair Deitcher, Ruth Benavides-Piccione, Javier DeFelipe, Chris-832tiaan P. J. de Kock, Huibert D. Mansvelder, and Idan Segev. Human Cortical Pyramidal Neurons: From Spines to833Spikes via Models.Frontiers in Cellular Neuroscience, 12, 2018. ISSN 1662-5102. doi: 10.3389/fncel.2018.00181.
 """
 
+# EyalGluDend = Glutamatergic(
+#     Receptor(E_rev = 0.0mV, τr = 0.26ms, τd = 2.0ms, g0 = 0.73nS), # CHANGED τr = 0.25 and ADDED units
+#     ReceptorVoltage(E_rev = 0.0mV, τr = 8ms, τd = 35.0ms, g0 = 1.31nS, nmda = 1.0f0), # 0.075f0/mV CHANGED nmda = 1.0f0 and ADDED units
+# )
 EyalGluDend = Glutamatergic(
-    Receptor(E_rev = 0.0, τr = 0.26, τd = 2.0, g0 = 0.73), # CHANGED τr = 0.25
-    ReceptorVoltage(E_rev = 0.0, τr = 8, τd = 35.0, g0 = 1.31, nmda = 0.075), # g0 = 1.31 ?, nmda = 1.0f0?
+    Receptor(E_rev = 0.0, τr = 0.25, τd = 2.0, g0 = 0.73),
+    ReceptorVoltage(E_rev = 0.0, τr = 8, τd = 35.0, g0 = 1.31, nmda = 1.0f0),
 )
 
 EyalGluDend_nonmda = Glutamatergic(
@@ -31,17 +35,30 @@ EyalGluDend_nonmda = Glutamatergic(
 Richard Miles, Katalin Tóth, Attila I Gulyás, Norbert Hájos, and Tamas F Freund.  Differences between Somatic923and Dendritic Inhibition in the Hippocampus.Neuron, 16(4):815–823, April 1996. ISSN 0896-6273. doi: 10.1016/924S0896-6273(00)80101-4.
 """
 MilesGabaDend = GABAergic(
-    Receptor(E_rev = -70.0, τr = 4.8, τd = 29.0, g0 = 0.27), # CHANGED E_rev = -75.0, g0 = 0.126
-    Receptor(E_rev = -90.0, τr = 30, τd = 400.0, g0 = 0.006), # CHANGED τd = 100.0
+    Receptor(E_rev = -75.0, τr = 4.8, τd = 29.0, g0 = 0.126),
+    Receptor(E_rev = -90.0, τr = 30, τd = 100.0, g0 = 0.006),
 )
 
 MilesGabaSoma =
-    GABAergic(Receptor(E_rev = -70.0, τr = 0.1, τd = 15.0, g0 = 0.38), Receptor()) # CHANGED E_rev = -75.0, τr = 0.5, τd = 6.0, g0 = 0.265
+    GABAergic(Receptor(E_rev = -75.0, τr = 0.5, τd = 6.0, g0 = 0.265), Receptor())
 
 DuarteGluSoma = Glutamatergic(
-    Receptor(E_rev = 0.0, τr = 0.26, τd = 2.0, g0 = 0.73), # CHANGED τr = 0.25
+    Receptor(E_rev = 0.0, τr = 0.25, τd = 2.0, g0 = 0.73),
     ReceptorVoltage(E_rev = 0.0, nmda = 0.0f0),
 )
+
+# MilesGabaDend = GABAergic(
+#     Receptor(E_rev = -70.0mV, τr = 4.8ms, τd = 29.0ms, g0 = 0.27nS), # CHANGED  E_rev = -75.0, g0 = 0.126 and ADDED units
+#     Receptor(E_rev = -90.0mV, τr = 30ms, τd = 400.0ms, g0 = 0.006nS), # CHANGED τd = 400.0 and ADDED units
+# )
+
+# MilesGabaSoma =
+#     GABAergic(Receptor(E_rev = -70.0mV, τr = 0.1ms, τd = 15.0ms, g0 = 0.38mS), Receptor()) # CHANGED E_rev = -75.0, τr = 0.5, τd = 6.0, g0 = 0.265 and ADDED units
+
+# DuarteGluSoma = Glutamatergic(
+#     Receptor(E_rev = 0.0mV, τr = 0.26ms, τd = 2.0ms, g0 = 0.73nS), # CHANGED τr = 0.25 AND ADDED units
+#     ReceptorVoltage(E_rev = 0.0mV, nmda = 0.0f0),
+# )
 
 # EyalNMDA = NMDAVoltageDependency(mg = Mg_mM, b = nmda_b, k = nmda_k)
 
@@ -53,4 +70,4 @@ quaresima2022 = (
         param = AdExSoma(Vr = -55mV, Vt = -50mV),
 )
 
-export quaresima2022, KochGlu, EyalGluDend, EyalNMDA, EyalGluDend_nonmda, MilesGabaDend, MilesGabaSoma
+export quaresima2022, KochGlu, EyalGluDend, EyalNMDA, EyalGluDend_nonmda, MilesGabaDend, MilesGabaSoma, DuarteGluSoma

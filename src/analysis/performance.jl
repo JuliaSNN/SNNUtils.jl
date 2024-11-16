@@ -11,4 +11,25 @@ function evaluate(population, intervals::Vector{Vector{Float32}}, target::Symbol
     return count / length(intervals)
 end
 
-export evaluate
+
+function compute_weight(pre_pop_cells, post_pop_cells, synapse)
+    Win = synapse.W
+    rowptr = synapse.rowptr
+    J = synapse.J  # Presynaptic neuron indices
+    index = synapse.index 
+    all_weights = Float64[]  # Store weights for all filtered connections
+
+    for neuron in post_pop_cells
+        # Get the range in W for this postsynaptic neuron's incoming connections
+        for st = rowptr[neuron]:(rowptr[neuron + 1] - 1)
+            st = index[st]
+            if (J[st] in pre_pop_cells)
+                push!(all_weights, Win[st])
+            end
+        end
+    end
+
+    return mean(all_weights)
+end
+
+export evaluate, compute_weight
