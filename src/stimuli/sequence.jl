@@ -98,7 +98,7 @@ function generate_sequence(lexicon, config, seed=nothing)
     @unpack seq_length, ph_space_duration = config
     @unpack dict, id2string, string2id, symbols, silence_symbol, ph_duration = lexicon
     silent_intervals = 1
-    if !isnothing(ph_space_duration) add_space = true end
+    if !isnothing(ph_space_duration) add_space = true else add_space = false end
     words, phonemes = generate_random_word_sequence(
         seq_length,
         dict,

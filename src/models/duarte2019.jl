@@ -49,11 +49,11 @@ duarte2019 = (
     #     τde = 1.80ms,
     #     τri = 0.19ms,
     #     τdi = 5.00ms,
-    #     gsyn_e = 0.56nS, # 0.56nS CHANGED 0.7
-    #     gsyn_i = 0.59nS, # 0.59nS CHANGED 0.8
-    #     a = 144nS, # ADDED  
+    #     gsyn_e = 0.7nS, # 0.56nS CHANGED 0.7
+    #     gsyn_i = 0.8nS, # 0.59nS CHANGED 0.8
+    #     a = 4nS, # ADDED  
     #     b = 80.5pA, #(pA) 'sra' current increment # CHANGED 80.5
-    #     τw = 4ms, #(s) adaptation time constant (~Ca-activated K current inactivation) # CHANGED 144ms
+    #     τw = 144ms, #(s) adaptation time constant (~Ca-activated K current inactivation) # CHANGED 144ms
     # ),
     AdEx = AdExParameterGsyn(El = -76.43, 
                             τm = 116.5pF/ 4.64nS, 

@@ -1,4 +1,9 @@
-function evaluate(population, intervals::Vector{Vector{Float32}}, target::Symbol, cells::Dict{Symbol,Any} = Dict())
+# using LinearAlgebra
+# using ScikitLearn
+# @sk_import linear_model: LogisticRegression
+# @sk_import metrics: accuracy_score, confusion_matrix
+
+function evaluate_avg_firing_rate(population, intervals::Vector{Vector{Float32}}, target::Symbol, cells::Dict{Symbol,Any} = Dict())
     count = 0
     for time_interval in intervals
         interval_range = range(first(time_interval), stop=last(time_interval), length=length(time_interval))
@@ -32,4 +37,29 @@ function compute_weight(pre_pop_cells, post_pop_cells, synapse)
     return mean(all_weights)
 end
 
-export evaluate, compute_weight
+# function evaluate_logistic_regression(X, y)
+#     # Split 80% training, 20% test
+#     train_ratio = 0.8
+#     n_train = floor(Int, train_ratio * n_trials)
+
+#     X_train = X[1:n_train, :]
+#     y_train = y[1:n_train]
+
+#     X_test = X[n_train+1:end, :]
+#     y_test = y[n_train+1:end]
+
+
+#     # Initialize and train logistic regression
+#     clf = LogisticRegression()
+#     fit!(clf, X_train, y_train)
+
+#     # Predict on test set
+#     y_pred = predict(clf, X_test)
+
+#     # Calculate accuracy
+#     accuracy = accuracy_score(y_test, y_pred)
+
+#     return accuracy
+# end
+
+export evaluate_avg_firing_rate, compute_weight, evaluate_logistic_regression
