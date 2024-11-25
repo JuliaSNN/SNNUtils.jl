@@ -1,7 +1,4 @@
-# using LinearAlgebra
-# using ScikitLearn
-# @sk_import linear_model: LogisticRegression
-# @sk_import metrics: accuracy_score, confusion_matrix
+using StatsBase
 
 function evaluate_avg_firing_rate(population, intervals::Vector{Vector{Float32}}, target::Symbol, cells::Dict{Symbol,Any} = Dict())
     count = 0
@@ -37,29 +34,43 @@ function compute_weight(pre_pop_cells, post_pop_cells, synapse)
     return mean(all_weights)
 end
 
-# function evaluate_logistic_regression(X, y)
-#     # Split 80% training, 20% test
-#     train_ratio = 0.8
-#     n_train = floor(Int, train_ratio * n_trials)
+function compute_firing_rates_moving_window(spike_times::Vector{Float32}, 
+    stimulus_intervals::Vector{Vector{Vector{Float32}}}, 
+    window_shift::Float64, 
+    targets::Vector{Int64})
+    # Number of shifts based on the window shift
+    n_shifts = Int(100ms / window_shift)  
 
-#     X_train = X[1:n_train, :]
-#     y_train = y[1:n_train]
+    target_labels = []
+    for (target, intervals) in zip(targets, stimulus_intervals) 
+        append!(target_labels, fill(target, length(intervals)))
+    end
+     
+    # Initialize arrays to store features and targets
+    features = []  # To store firing rates
 
-#     X_test = X[n_train+1:end, :]
-#     y_test = y[n_train+1:end]
+    for intervals in stimulus_intervals 
+        for interval in intervals
+            firing_rates = Float32[]
+            # Calculate firing rates for each shifted interval
+            for shift_idx in 0:n_shifts-1 
+                shifted_interval = interval[1] + shift_idx * window_shift, interval[2] + shift_idx * window_shift
+                start_time, end_time = shifted_interval
+                count = StatsBase.count(spike -> spike >= start_time && spike <= end_time, spike_times)
+                interval_length = end_time - start_time
+                append!(firing_rates, count / interval_length)
+            end
+            push!(features, firing_rates)
+        end
+    end
+
+    dataset = (
+        features = features,    # Array of firing rates (features)
+        targets = target_labels # Vector of targets
+    )
+
+    return dataset
+end
 
 
-#     # Initialize and train logistic regression
-#     clf = LogisticRegression()
-#     fit!(clf, X_train, y_train)
-
-#     # Predict on test set
-#     y_pred = predict(clf, X_test)
-
-#     # Calculate accuracy
-#     accuracy = accuracy_score(y_test, y_pred)
-
-#     return accuracy
-# end
-
-export evaluate_avg_firing_rate, compute_weight, evaluate_logistic_regression
+export evaluate_avg_firing_rate, compute_weight, evaluate_logistic_regression, compute_firing_rates_moving_window

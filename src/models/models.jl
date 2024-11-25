@@ -1,5 +1,8 @@
 include("quaresima2023.jl")
+include("quaresima2023modified.jl")
 include("quaresima2022.jl")
+include("quaresima2022modified.jl")
 include("duarte2019.jl")
+include("duarte2019modified.jl")
 include("lkd2014.jl")
 include("connections.jl")
