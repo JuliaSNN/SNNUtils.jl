@@ -36,37 +36,3 @@ LKD2014 = (
 
 
 export LKD2014
-##
-# IF = SNN.IF(; N = 1, param = LKD2014.PV)
-
-# p2 = SNN.plot()
-# SNN.monitor([IF], [:fire, :v])
-# stim = SpikeTimeStimulus(1, IF, :ge, p=1.f0, param=inputs)
-# sim!([IF],[SNN.EmptySynapse()], [stim], duration=1200ms, dt=0.1ms)
-# p2 = SNN.vecplot!(p2, IF, :v, r=800:0.001:1200ms, neurons=[1], dt=0.1ms, label= IF.param.gsyn_e)
-
-# SNN.monitor([IF], [:fire, :v])
-# stim = SpikeTimeStimulus(1, IF, :gi, p=1.f0, param=inputs)
-# sim!([IF],[SNN.EmptySynapse()], [stim], duration=1200ms, dt=0.1ms)
-# p2 = SNN.vecplot!(p2, IF, :v, r=800:0.001:1200ms, neurons=[1], dt=0.1ms, label= IF.param.gsyn_i)
-# SNN.plot!(p2, ylims=:auto)
-
-# #
-# IF = SNN.AdEx(; N = 1, param = LKD2014.AdEx)
-
-# p3 = SNN.plot()
-# SNN.monitor([IF], [:fire, :v])
-# stim = SpikeTimeStimulus(1, IF, :ge, p=1.f0, param=inputs, μ=20)
-# stim2 = CurrentStimulus(IF, I_base=100pA)
-# sim!([IF],[SNN.EmptySynapse()], [stim,stim2], duration=1200ms, dt=0.1ms)
-# p3 = SNN.vecplot!(p3, IF, :v, r=800:0.001:1200ms, neurons=[1], dt=0.1ms, label= IF.param.gsyn_e)
-
-# SNN.monitor([IF], [:fire, :v])
-# stim = SpikeTimeStimulus(1, IF, :gi, p=1.f0, param=inputs, μ=20)
-# sim!([IF],[SNN.EmptySynapse()], [stim,stim2], duration=1200ms, dt=0.1ms)
-# p3 = SNN.vecplot!(p3, IF, :v, r=800:0.001:1200ms, neurons=[1], dt=0.1ms, label= IF.param.gsyn_i)
-# SNN.plot!(p3, ylims=:auto)
-
-# #
-# SNN.plot(p2, p3, legend=true,)
-# ###
