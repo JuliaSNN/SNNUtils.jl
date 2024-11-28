@@ -1,8 +1,9 @@
-
 quaresima2023 = (
     plasticity = (
         iSTDP_rate = SNN.iSTDPParameterRate(η = 0.2, τy = 5ms, r=10Hz, Wmax = 273.4pF, Wmin = 0.1pF), 
         iSTDP_potential =SNN.iSTDPParameterPotential(η = 0.2, v0 = -70mV, τy = 20ms, Wmax = 273.4pF, Wmin = 0.1pF),        
+        #iSTDP_rate = SNN.iSTDPParameterRate(η = 0.2, τy = 20ms, r=10Hz, Wmax = 243.0pF, Wmin = 2.78pF), # CHANGED η = 1., τy = 5ms, r=4Hz, Wmax = 273.4pF, Wmin = 0.1pF
+        #iSTDP_potential =SNN.iSTDPParameterPotential(η = 0.2, v0 = -70mV, τy = 5ms, Wmax = 243.0pF, Wmin = 2.78pF), # CHANGED  η = 0.1, Wmax = 273.4pF, Wmin = 0.1pF, τy = 20ms    
         vstdp = SNN.vSTDPParameter(
                 A_LTD = 4.0f-5,  #ltd strength          # made 10 times slower
                 A_LTP = 14.0f-5, #ltp strength
@@ -17,11 +18,11 @@ quaresima2023 = (
     ),
     connectivity = (
         EdE = (p = 0.2,  μ = 10., dist = Normal, σ = 1),
-        IfE = (p = 0.2,  μ = log(2.),  dist = LogNormal, σ = 0.),
-        IsE = (p = 0.2,  μ = log(2.),  dist = LogNormal, σ = 0.),
+        IfE = (p = 0.2,  μ = log(2.0),  dist = LogNormal, σ = 0.),
+        IsE = (p = 0.2,  μ = log(2.5),  dist = LogNormal, σ = 0.),
 
         EIf = (p = 0.2,  μ = log(10.8), dist = LogNormal, σ = 0),
-        IsIf = (p = 0.2, μ = log(5.4),  dist = LogNormal, σ = 0.25),
+        IsIf = (p = 0.2, μ = log(2.4),  dist = LogNormal, σ = 0.25),
         IfIf = (p = 0.2, μ = log(15.2), dist = LogNormal, σ = 0.14),
 
         EdIs = (p = 0.2, μ = log(10.0), dist = LogNormal, σ = 0),
@@ -61,17 +62,16 @@ function ballstick_network(;
     # Define normalization
     norm = SNN.SynapseNormalization(NE, [E_to_E], param = SNN.MultiplicativeNorm(τ = 20ms))
     # background noise
-    noise = Dict(
-        # :noise_s   => SNN.PoissonStimulus(E,  :he_s,  param=1.0kHz, cells=:ALL, μ=0.f0, name="noise_s",),
-        :d   => SNN.PoissonStimulus(E,  :he_d,  param=2.0kHz, cells=:ALL, μ=1.f0, name="noise_s",),
-        :i1  => SNN.PoissonStimulus(I1, :ge,   param=1.5kHz, cells=:ALL, μ=1.f0,  name="noise_i1"),
-        :i2  => SNN.PoissonStimulus(I2, :ge,   param=2.0kHz, cells=:ALL, μ=1.8f0, name="noise_i2")
+    stimuli = Dict(
+        :noise_s   => SNN.PoissonStimulus(E,  :he_s,  param=6.0kHz, cells=:ALL, μ=5.f0, name="noise_s",),
+        :noise_i1  => SNN.PoissonStimulus(I1, :ge,   param=2.5kHz, cells=:ALL, μ=1.f0,  name="noise_i1"),
+        :noise_i2  => SNN.PoissonStimulus(I2, :ge,   param=3.0kHz, cells=:ALL, μ=1.8f0, name="noise_i2")
     )
     # Store neurons and synapses into a dictionary
     pop = dict2ntuple(@strdict E I1 I2)
     syn = dict2ntuple(@strdict E_to_I1 E_to_I2 I1_to_E I2_to_E I1_to_I1 I2_to_I2 I1_to_I2 I2_to_I1 E_to_E norm)
     # Return the network as a model
-    merge_models(pop, syn, noise=noise, silent=true)
+    merge_models(pop, syn, stimuli, silent=true)
 end
 
 

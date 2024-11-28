@@ -34,5 +34,29 @@ LKD2014 = (
     )
 )
 
+LKD2014SingleExp = (
+    AdEx = AdExParameterSingleExponential(
+                        El = -70mV, 
+                        Vt = -52.0mV, 
+                        τm = 300pF /15.0nS, 
+                        R = 1/(15.0nS),
+                        Vr = -60.0f0mV,
+                        τabs = 1ms,       
+                        τi=2.0,
+                        τe=6.0,
+                        E_i = -75mV,
+                        E_e = 0mV,
+                        At = 10mV
+                        ),
+    PV = IFParameterSingleExponential(
+        El = -62.0mV,
+        Vr = -57.47mV,   #(mV)
+        Vt = -52.0mV,
+        τm = 20ms,
+        τi=2.0,
+        τe=6.0,
+    )
+)
 
-export LKD2014
+
+export LKD2014, LKD2014SingleExp

@@ -1,5 +1,6 @@
 include("projections.jl")
 include("sequence.jl")
+include("sequence_generators.jl")
 include("balance_EI/load.jl")
 include("models.jl")
 

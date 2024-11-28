@@ -23,9 +23,9 @@ duarte2019 = (
         τde = 1.80ms,
         τri = 0.19ms,
         τdi = 5.00ms,
-        gsyn_e = 0.7ns, # 0.56nS 
-        gsyn_i = 0.8ns, # 0.59nS 
-        b = 80.5pA,      #(pA) 'sra' current increment
+        gsyn_e = 0.56nS, # CHANGED 0.8
+        gsyn_i = 0.59nS, # CHANGED 0.7
+        b = 80.5pA,       #(pA) 'sra' current increment
         τw = 144ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     ),
     # ),
@@ -36,9 +36,10 @@ duarte2019 = (
                         τabs = 2.05ms,
                         τre = 0.25ms,
                         τde = 2.0ms,
-                        gsyn_e = 0.73,
                         τri = 0.5ms, 
                         τdi = 6.0ms,
-                        gsyn_i = 0.265)
+                        gsyn_e = 0.73,
+                        gsyn_i = 0.265
+                        )
 )
 export duarte2019
