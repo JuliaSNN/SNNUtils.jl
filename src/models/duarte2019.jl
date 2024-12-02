@@ -5,31 +5,28 @@ duarte2019 = (
         El = -64.33mV,
         Vt = -38.97mV,
         Vr = -57.47mV,
-        τabs = 0.42ms,
+        τabs = 0.5ms,
         τre = 0.18ms,
         τde = 0.70ms,
         τri = 0.19ms,
         τdi = 2.50ms,
-    #     gsyn_e = 1.04nS, # ADDED
-    #     gsyn_i = 0.84nS, # ADDED
     ),
     SST = SNN.IFParameterGsyn(
         τm = 102.86pF / 4.61nS,
         El = -61mV,
         Vt = -34.4mV,
         Vr = -47.11mV,
-        τabs = 1.34ms,
+        τabs = 1.3ms,
         τre = 0.18ms,
         τde = 1.80ms,
         τri = 0.19ms,
         τdi = 5.00ms,
-        gsyn_e = 0.56nS, # CHANGED 0.8
-        gsyn_i = 0.59nS, # CHANGED 0.7
+        gsyn_e = 0.7nS, #0.56nS, 
+        gsyn_i = 0.8nS, #0.59nS,
+        a = 2nS,
         b = 80.5pA,       #(pA) 'sra' current increment
         τw = 144ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     ),
-    # ),
-
     AdEx = AdExParameterGsyn(El = -76.43, 
                             τm = 116.5pF/ 4.64nS, 
                         Vt = -44.45, 

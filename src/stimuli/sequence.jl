@@ -79,16 +79,21 @@ Generate a sequence of words and phonemes based on the provided lexicon and conf
     - `silence_symbol`: The symbol representing silence.
     - `ph_duration`: A dictionary mapping phonemes to their corresponding durations.
 
+- `config`: A dictionary containing the configuration information.
+    - `seq_length`: The length of the sequence to generate.
+    - `init_silence` (optional): The initial silence symbol to use in the sequence.
+
+- `seed` (optional): The seed value for the random number generator.
+
 # Returns
 A named tuple containing the lexicon information and the generated sequence.
 
 """
-function generate_sequence(lexicon, seq_function::Function, seed=nothing; init_silence=1s, kwargs...)
+function generate_sequence(lexicon, config, seed=nothing)
 
-    words, phonemes, seq_length = seq_function(
-                        lexicon;        
-                        kwargs...
-                    )
+    if seed !== nothing
+        Random.seed!(seed)
+    end 
 
     @unpack seq_length, ph_space_duration = config
     @unpack dict, id2string, string2id, symbols, silence_symbol, ph_duration = lexicon
@@ -142,6 +147,7 @@ function generate_sequence(lexicon, seq_function::Function, seed=nothing; init_s
                 line_id = line_id)
 
 end
+
 
 """
     sign_intervals(sign::Symbol, sequence)
