@@ -10,6 +10,8 @@ duarte2019 = (
         τde = 0.70ms,
         τri = 0.19ms,
         τdi = 2.50ms,
+        # gsyn_e=1.04nS,
+        # gsyn_i=0.84nS
     ),
     SST = SNN.IFParameterGsyn(
         τm = 102.86pF / 4.61nS,
@@ -21,9 +23,9 @@ duarte2019 = (
         τde = 1.80ms,
         τri = 0.19ms,
         τdi = 5.00ms,
-        gsyn_e = 0.7nS, #0.56nS, 
-        gsyn_i = 0.8nS, #0.59nS,
-        a = 2nS,
+        gsyn_e = 0.56nS, # 0.8nS,
+        gsyn_i = 0.59nS, # 0.7nS,
+        a = 4nS,
         b = 80.5pA,       #(pA) 'sra' current increment
         τw = 144ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     ),

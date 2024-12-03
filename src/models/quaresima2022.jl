@@ -43,8 +43,6 @@ DuarteGluSoma = Glutamatergic(
     ReceptorVoltage(E_rev = 0.0, nmda = 0.0f0),
 )
 
-# EyalNMDA = NMDAVoltageDependency(mg = Mg_mM, b = nmda_b, k = nmda_k)
-
 quaresima2022 = (
         dends  =  [(150um, 400um), (150um, 400um)],
         soma_syn = Synapse(DuarteGluSoma, MilesGabaSoma), # defines glutamaterbic and gabaergic receptors in the soma
