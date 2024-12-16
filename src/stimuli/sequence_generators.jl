@@ -315,7 +315,7 @@ function step_input_sequence(;network,
     kwargs...)
 
     @unpack E = network.pop
-    seq = generate_sequence(lexicon, word_phonemes_sequence; kwargs...)
+    seq = generate_sequence(lexicon, word_phonemes_sequence; kwargs...) #vot_sequence
 
 
     stim = Dict{Symbol,Any}()

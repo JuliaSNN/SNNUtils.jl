@@ -31,29 +31,30 @@ function average_weight(pre_pop_cells::Vector{Int}, post_pop_cells::Vector{Int},
     return mean(all_weights)
 end
 
-function compute_firing_rates_moving_window(spike_times::Vector{Float32}, 
+function compute_firing_rates_moving_window(pop, 
+    cellss::Vector{Vector{Int64}}, 
     stimulus_intervals::Vector{Vector{Vector{Float32}}}, 
     window_shift::Float64, 
     targets::Vector{Int64})
     # Number of shifts based on the window shift
     n_shifts = Int(100ms / window_shift)  
 
+    # Initialize arrays to store features and targets
     target_labels = []
+    features = [] # To store firing rates
+
     for (target, intervals) in zip(targets, stimulus_intervals) 
         append!(target_labels, fill(target, length(intervals)))
     end
-     
-    # Initialize arrays to store features and targets
-    features = []  # To store firing rates
-
-    for intervals in stimulus_intervals 
+    
+    for (intervals, cells) in zip(stimulus_intervals, cellss)
         for interval in intervals
             firing_rates = Float32[]
             # Calculate firing rates for each shifted interval
             for shift_idx in 0:n_shifts-1 
-                shifted_interval = interval[1] + shift_idx * window_shift, interval[2] + shift_idx * window_shift
-                start_time, end_time = shifted_interval
-                count = StatsBase.count(spike -> spike >= start_time && spike <= end_time, spike_times)
+                start_time, end_time = interval[1] + shift_idx * window_shift, interval[2] + shift_idx * window_shift
+                count = length.(spiketimes(pop, interval=start_time:end_time)[cells]) |>sum
+                # StatsBase.count(spike -> spike >= start_time && spike <= end_time, spike_times)
                 interval_length = end_time - start_time
                 append!(firing_rates, count / interval_length)
             end
