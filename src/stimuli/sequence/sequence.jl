@@ -12,8 +12,6 @@ Generate a lexicon based on the given configuration.
 
 # Returns
 A named tuple containing the following fields:
-- `id2string`: A mapping from numbers to symbols.
-- `string2id`: A mapping from symbols to numbers.
 - `dict`: The input dictionary.
 - `symbols`: A tuple containing the phonemes and words.
 - `ph_duration`: The duration of each phoneme.
@@ -27,32 +25,14 @@ function generate_lexicon(config)
     all_phonemes = collect(values(dictionary)) |> Iterators.flatten |> Set |> collect |> sort |> Vector{Symbol}
     symbols = collect(union(all_words,all_phonemes))
 
-    ## create mapping between numbers and phonemes
-    mapping = Dict{Int, Symbol}()
-    r_mapping = Dict{Symbol, Int}()
-    for (n, s) in enumerate(all_words)
-        push!(mapping, n => s)
-        push!(r_mapping, s => n)
-    end
-    for (n, s) in enumerate(all_phonemes)
-        n = n + length(all_words)
-        push!(mapping, n => s)
-        push!(r_mapping, s => n)
-    end
-
     ## Add the silence symbol
     silence_symbol = :_
-    silence = length(symbols) + 1
-    push!(mapping, silence => silence_symbol)
-    push!(r_mapping, silence_symbol => silence)
 
-    return (id2string = mapping, 
-            string2id = r_mapping, 
-            dict=dictionary, 
+    return (dict=dictionary, 
             symbols=(phonemes = all_phonemes, 
             words = all_words), 
             ph_duration = ph_duration, 
-            silence_symbol = silence_symbol)
+            silence = silence_symbol)
 end
 
 """
@@ -63,8 +43,6 @@ Generate a sequence of words and phonemes based on the provided lexicon and conf
 # Arguments
 - `lexicon`: A dictionary containing the lexicon information.
     - `dict`: A dictionary mapping words and phonemes to their corresponding IDs.
-    - `id2string`: A dictionary mapping IDs to their corresponding words and phonemes.
-    - `string2id`: A dictionary mapping words and phonemes to their corresponding IDs.
     - `symbols`: A list of symbols in the lexicon.
     - `silence_symbol`: The symbol representing silence.
     - `ph_duration`: A dictionary mapping phonemes to their corresponding durations.
@@ -73,24 +51,23 @@ Generate a sequence of words and phonemes based on the provided lexicon and conf
 A named tuple containing the lexicon information and the generated sequence.
 
 """
-function generate_sequence(lexicon, seq_function::Function, seed=nothing; init_silence=1s, kwargs...)
+function generate_sequence(seq_function::Function; init_silence=1s, lexicon::NamedTuple, kwargs...)
 
-    words, phonemes, seq_length = seq_function(
-                        lexicon;        
+    words, phonemes, seq_length = seq_function(;
+                        lexicon=lexicon,
                         kwargs...
                     )
 
-    @unpack dict, id2string, string2id, symbols, silence_symbol, ph_duration = lexicon
+    @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
     ## sequence from the initial word sequence
-    silence = string2id[silence_symbol]
-    sequence = fill(silence, 3, seq_length+1)
+    sequence = Matrix{Any}(fill(silence, 3, seq_length+1))
     sequence[1, 1] = silence
     sequence[2, 1] = silence
     sequence[3, 1] = init_silence
     for (n, (w, p)) in enumerate(zip(words, phonemes))
-        sequence[1, 1+n] = string2id[w]
-        sequence[2, 1+n] = string2id[p]
+        sequence[1, 1+n] = w
+        sequence[2, 1+n] = p
         sequence[3, 1+n] = ph_duration[p]
     end
 
@@ -117,7 +94,7 @@ Given a sign symbol and a sequence, this function identifies the line of the seq
 # Example
 """
 function sign_intervals(sign::Symbol, sequence)
-    @unpack dict, id2string, string2id, sequence, symbols, line_id = sequence
+    @unpack dict, sequence, symbols, line_id = sequence
     ## Identify the line of the sequence that contains the sign
     sign_line_id = -1
     for k in keys(symbols)
@@ -137,19 +114,37 @@ function sign_intervals(sign::Symbol, sequence)
     interval = [-1, -1]
     my_seq = sequence[sign_line_id, :]
     while !isnothing(_end)  || !isnothing(_start)
-        _start = findfirst(x -> x == string2id[sign], my_seq[_end:end])
+        _start = findfirst(x -> x == sign, my_seq[_end:end])
         if isnothing(_start)
             break
         else
             _start += _end-1
         end
-        _end  = findfirst(x -> x != string2id[sign], my_seq[_start:end]) + _start - 1
+        _end  = findfirst(x -> x != sign, my_seq[_start:end]) + _start - 1
         interval[1] = cum_duration[_start] - sequence[line_id.duration,_start]
         interval[2] = cum_duration[_end-1]
         push!(intervals, interval)
     end
     return intervals
 end
+
+
+function all_intervals(sym::Symbol, sequence; interval::Vector=[-50ms, 100ms] )
+    offsets = Vector{Vector{Float32}}()
+    ys = Vector{Symbol}()
+    symbols = getfield(sequence.symbols, sym)
+    @show symbols
+    for word in symbols
+        for myinterval in sign_intervals(word, sequence)
+            offset = myinterval[end] .+ interval
+            push!(offsets, offset)
+            push!(ys, word)
+        end
+    end
+    return offsets, ys
+end
+
+
 
 """
     sequence_end(seq)
@@ -281,5 +276,14 @@ function getcells(stim, symbol, target)
    return collect(Set(getfield(stim,Symbol(string(symbol, target ))).cells))
 end
 
+function getstim(stim, word, target)
+    return getfield(stim, getstimsym(word, target))
+end
 
-export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getduration, getphonemes, symbolnames, getcells
+function getstimsym(word, target)
+    return Symbol(string(word)*"_$target")
+end
+
+export getstim, getstimsym
+
+export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getduration, getphonemes, symbolnames, getcells, all_intervals

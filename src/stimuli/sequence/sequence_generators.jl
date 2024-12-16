@@ -17,8 +17,8 @@ Generate a random word sequence of a given length using a dictionary of words an
 - `words::Vector{Symbol}`: The generated word sequence.
 - `phonemes::Vector{Symbol}`: The corresponding phonemes for each word in the sequence.
 """
-function word_phonemes_sequence(
-    lexicon;
+function word_phonemes_sequence(;
+    lexicon,
     weights = nothing,
     seed = nothing,
     silent_intervals = 1,
@@ -27,7 +27,7 @@ function word_phonemes_sequence(
 )
 
 
-    @unpack dict, symbols, silence_symbol, ph_duration = lexicon
+    @unpack dict, symbols, silence, ph_duration = lexicon
     if seed !== nothing
         Random.seed!(seed)
     end 
@@ -54,11 +54,13 @@ function word_phonemes_sequence(
         end
 
         if should_fill_with_silence(word_phonemes, silent_intervals, seq_length, length(words))
-            fill_with_silence!(words, phonemes, silence_symbol, seq_length - length(words))
+            fill_with_silence!(words, phonemes, silence, seq_length - length(words))
         else
-            append_word_and_phonemes!(words, phonemes, current_word, word_phonemes, silence_symbol, silent_intervals)
+            append_word_and_phonemes!(words, phonemes, current_word, word_phonemes, silence, silent_intervals)
         end
     end
+    @assert length(words) == seq_length
+    @assert length(phonemes) == seq_length
 
     return words, phonemes, seq_length
 end
@@ -129,66 +131,6 @@ function vot_sequence(
 
     return words, phonemes
 end
-
-
-# What is this function doing?
-# function generate_sequence_variable(lexicon, config, seed=nothing)
-
-#     if seed !== nothing
-#         Random.seed!(seed)
-#     end 
-
-#     @unpack seq_length, vot_duration = config
-#     @unpack dict, id2string, string2id, symbols, silence_symbol, ph_duration = lexicon
-#     silent_intervals = 1
-#     words, phonemes = get_words(
-#         seq_length,
-#         dict,
-#         silence_symbol,
-#         silent_intervals = silent_intervals;
-#         vot_duration = vot_duration
-#     )
-
-#     ## create the populations
-#     ## sequence from the initial word sequence
-#     silence = string2id[silence_symbol]
-#     if haskey(config,:init_silence)
-#         sequence = fill(silence, 3, seq_length+1)
-#         sequence[1, 1] = silence
-#         sequence[2, 1] = silence
-#         sequence[3, 1] = config.init_silence
-#         for (n, (w, p)) in enumerate(zip(words, phonemes))
-#             sequence[1, 1+n] = string2id[w]
-#             sequence[2, 1+n] = string2id[p]
-#             if p in keys(vot_duration)
-#                 min, max = vot_duration[p]
-#                 space_duration = rand(min:max)
-#                 sequence[3, 1+n] = space_duration
-#             else
-#                 sequence[3, 1+n] = ph_duration[p]
-#             end
-#         end
-#     else
-#         sequence = fill(silence, 3, seq_length)
-#         for (n, (w, p)) in enumerate(zip(words, phonemes))
-#             sequence[1, n] = string2id[w]
-#             sequence[2, n] = string2id[p]
-#             if p in keys(vot_duration)
-#                 min, max = vot_duration[p]
-#                 space_duration = rand(min:max)
-#                 sequence[3, n] = space_duration
-#             else
-#                 sequence[3, n] = ph_duration[p]
-#             end
-#         end
-#     end
-
-#     line_id = (phonemes=2, words=1, duration=3)
-#     sequence = (;lexicon...,
-#                 sequence=sequence,
-#                 line_id = line_id)
-
-# end
 
 
 """
@@ -303,20 +245,23 @@ Generate a sequence input for a spiking neural network.
 - `seq`: The generated sequence.
 
 """
-function step_input_sequence(;network, 
-    targets, 
-    words, 
-    lexicon, 
-    p_post, 
-    peak_rate, 
-    start_rate, 
-    proj_strength,
-    decay_rate,
-    kwargs...)
+function step_input_sequence(;
+    generator_function::Function = word_phonemes_sequence, # function to generate the sequence
+    seq=nothing, # optionally provide a sequence    
+    network::NamedTuple, # network object
+    words::Bool,  # active or inactive word inputs
+    ## Projection parameters
+    targets::Vector{Symbol},  # target neuron's compartments
+    p_post::Real,  # probability of post_synaptic projection
+    peak_rate::Real, # peak rate of the stimulus
+    start_rate::Real, # start rate of the stimulus
+    decay_rate::Real, # decay rate of attack-peak function
+    proj_strength::Real, # strength of the synaptic projection
+    kwargs...
+    )
 
     @unpack E = network.pop
-    seq = generate_sequence(lexicon, word_phonemes_sequence; kwargs...) #vot_sequence
-
+    seq = isnothing(seq) ? generate_sequence(generator_function; kwargs...) : seq
 
     stim = Dict{Symbol,Any}()
     parameters = Dict(:decay=>decay_rate, :peak=>peak_rate, :start=>start_rate)
@@ -325,10 +270,11 @@ function step_input_sequence(;network,
         variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
         param = PSParam(rate=attack_decay, 
                     variables=variables)
+        push!(stim, s =>Dict{Symbol,Any}())
         for t in targets
-            push!(stim, Symbol(string(s,"_",t))  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="w_$s", p_post=p_post))
+            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="w_$s", p_post=p_post))
             if !words
-                getfield(stim, Symbol(string(s,"_",t)) ).param.active[1] = false
+                stim[s][t].param.active[1] = false
             end
         end
     end
@@ -336,8 +282,10 @@ function step_input_sequence(;network,
         variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
         param = PSParam(rate=attack_decay, 
                     variables=variables)
+        push!(stim, s =>Dict{Symbol,Any}())
         for t in targets
-            push!(stim,Symbol(string(s,"_",t))  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", p_post=p_post) 
+            # ph = Symbol(string(s,"_",t))
+            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", p_post=p_post) 
             )
         end
     end
@@ -345,20 +293,40 @@ function step_input_sequence(;network,
     stim, seq
 end
 
-function randomize_sequence!(;seq, model, target::Symbol, words=true, kwargs...)
-    new_seq = generate_sequence(seq, word_phonemes_sequence; kwargs...)
+function randomize_sequence!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
+    new_seq = generate_sequence(lexicon, word_phonemes_sequence; kwargs...)
     @unpack stim = model
-    for s in seq.symbols.words
-        getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
-        if !words 
-            getfield(stim, Symbol(string(s,"_",target)) ).param.active[1] = false
+    for target in targets
+        for s in seq.symbols.words
+            word =Symbol(string(s,"_",t)) 
+            get(stim, word, error("Access to non-existing word")).param.variables[:intervals] = sign_intervals(s, new_seq)
+            if !words 
+                get(stim, word, error("Access to non-existing word")).param.active[1] = false
+            end
         end
-    end
-    for s in seq.symbols.phonemes
-        getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+        for s in lexicon.symbols.phonemes
+            ph = Symbol(string(s,"_",target))
+            get(stim, ph, error()).param.variables[:intervals] = sign_intervals(s, new_seq)
+        end
     end
     return new_seq
 end
+
+function update_sequence!(;seq, model, targets::Vector{Symbol}, words=true, kwargs...)
+    @unpack stim = model
+    for target in targets
+        for s in seq.symbols.words
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, seq)
+            if !words 
+                getfield(stim, Symbol(string(s,"_",target)) ).param.active[1] = false
+            end
+        end
+        for s in seq.symbols.phonemes
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, seq)
+        end
+    end
+end
+
 
 
 function dummy_input(x, param::PSParam)
@@ -397,4 +365,4 @@ end
 # scatter(new_seq.sequence[1,:], seq.sequence[1,:], label="New sequence", c=:black, alpha=0.01, ms=10)
 
 
-export step_input_sequence, randomize_sequence!, dummy_input, attack_decay
+export step_input_sequence, randomize_sequence!, dummy_input, attack_decay, update_sequence!, word_phonemes_sequence
