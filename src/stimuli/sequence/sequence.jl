@@ -305,8 +305,8 @@ function symbolnames(seq)
 end
 
 function getcells(stim, symbol, target)
-    target = target =="" ? "" : "_$target"
-   return collect(Set(getfield(stim,Symbol(string(symbol, target ))).cells))
+    target = (target ==:s) || isnothing(target) ? "" : "_$target" |> target->Symbol(string(symbol, target ))
+   return collect(Set(getfield(stim,target).cells))
 end
 
 function getstim(stim, word, target)

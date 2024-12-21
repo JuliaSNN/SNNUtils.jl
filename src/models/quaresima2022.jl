@@ -17,8 +17,8 @@ Guy Eyal, Matthijs B. Verhoog, Guilherme Testa-Silva, Yair Deitcher, Ruth Benavi
 """
 
 EyalGluDend = Glutamatergic(
-    Receptor(E_rev = 0.0, τr = 0.26, τd = 2.0, g0 = 0.73), # τr = 0.25
-    ReceptorVoltage(E_rev = 0.0, τr = 8, τd = 35.0, g0 = 1.31, nmda = 1.0f0),
+    Receptor(E_rev = 0.0, τr = 0.26, τd = 2.0, g0 = 0.73), # CHANGED τr = 0.25
+    ReceptorVoltage(E_rev = 0.0, τr = 8, τd = 35.0, g0 = 1.31, nmda = 1.), # g0 = 1.31 ?, nmda = 1.0f0?
 )
 
 EyalGluDend_nonmda = Glutamatergic(

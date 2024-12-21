@@ -125,13 +125,49 @@ function score_activity(model, seq, interval=[0ms, 100ms]; pop=:E)
         occurences[word_id] += 1
         for w in eachindex(seq.symbols.words)
             word_test = seq.symbols.words[w]
-            cells = getstim(stim, word_test, :d).cells
+            cells = getstim(model.stim, word_test, :d).cells
             activity[w] = mean(S[cells, y])
         end
         activated = argmax(activity)
         confusion_matrix[activated, word_id] += 1
     end
     return confusion_matrix./occurences'
+end
+
+
+
+function MultinomialLogisticRegression(
+    X::Matrix{Float64},
+    labels::Array{Int64};
+    λ = 0.5::Float64,
+    test_ratio = 0.5,
+)
+    n_classes = length(Set(labels))
+    y = labels_to_y(labels)
+    n_features = size(X, 1)
+
+    train, test = make_set_index(length(y), test_ratio)
+    @show length(test) + length(train)
+    @show length(train)
+
+    train_std = StatsBase.fit(ZScoreTransform, X[:, train], dims = 2)
+    StatsBase.transform!(train_std, X)
+    intercept = false
+    X[isnan.(X)] .= 0
+
+    # deploy MultinomialRegression from MLJLinearModels, λ being the strenght of the reguliser
+    mnr = MultinomialRegression(λ; fit_intercept = intercept)
+    # Fit the model
+    θ = MLJLinearModels.fit(mnr, X[:, train]', y[train])
+    # # The model parameters are organized such we can apply X⋅θ, the following is only to clarify
+    # Get the predictions X⋅θ and map each vector to its maximal element
+    # return θ, X
+    preds = MLJLinearModels.softmax(MLJLinearModels.apply_X(X[:, test]', θ, n_classes))
+    targets = map(x -> argmax(x), eachrow(preds))
+    #and evaluate the model over the labels
+    scores = mean(targets .== y[test])
+    params = reshape(θ, n_features + Int(intercept), n_classes)
+    return scores, params
 end
 
 

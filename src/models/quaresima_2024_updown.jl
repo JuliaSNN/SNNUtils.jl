@@ -6,10 +6,10 @@ EyalGluNAR(NAR=1.8, τd=35ms) = Glutamatergic(
 
 EyalEquivalentNAR(NAR, τd=35) = Synapse(EyalGluNAR(NAR, τd), MilesGabaDend)
 
-quaresima2022_nar(x) = (
+quaresima2022_nar(x, τ=35ms) = (
         dends  =  [(150um, 400um), (150um, 400um)],
         soma_syn = Synapse(DuarteGluSoma, MilesGabaSoma), # defines glutamaterbic and gabaergic receptors in the soma
-        dend_syn = EyalEquivalentNAR(x, 35ms), # defines glutamaterbic and gabaergic receptors in the dendrites
+        dend_syn = EyalEquivalentNAR(x, τ), # defines glutamaterbic and gabaergic receptors in the dendrites
         NMDA = EyalNMDA, # NMDA synapse
         param = AdExSoma(Vr = -55mV, Vt = -50mV),
 )
