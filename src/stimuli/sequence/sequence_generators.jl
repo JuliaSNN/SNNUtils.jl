@@ -65,30 +65,34 @@ function word_phonemes_sequence(;
     return words, phonemes, seq_length
 end
 
-function vot_sequence(
-    sequence_length::Int,
-    dictionary::Dict{Symbol, Vector{Symbol}},
-    silence_symbol::Symbol;
+function vot_sequence(;
+    lexicon,
     weights = nothing,
+    seed = nothing,
     silent_intervals = 1,
-    vot_duration = nothing
+    repetition::Int,
+    kwargs...
 )
 
-    dict_words = collect(keys(dictionary))
+    @unpack dict, symbols, silence, ph_duration = lexicon
+    if seed !== nothing
+        Random.seed!(seed)
+    end 
 
+
+    dict_words = collect(keys(dict))
     weights = isnothing(weights) ? fill(1, length(dict_words)) : [weights[word] for word in dict_words]
     weights = StatsBase.Weights(weights)
-
     word_frequency = Dict{Symbol,Int}()
     words, phonemes = [], []
 
     remaining_words = copy(dict_words)
     make_equal = true
 
-    sequence_length = round(Int, dict_words*repetition* mean([length(dictionary[word]) for word in dict_words])), 
-    while length(words) < sequence_length
+    seq_length = round(Int, length(dict_words)*repetition* mean([length(dict[word]) for word in dict_words]))
+    while length(words) < seq_length
         current_word = choose_word(make_equal, remaining_words, dict_words, weights, word_frequency)
-        word_phonemes = dictionary[current_word]
+        word_phonemes = dict[current_word]
 
         if haskey(word_frequency, current_word)
             word_frequency[current_word] += 1
@@ -96,40 +100,16 @@ function vot_sequence(
             word_frequency[current_word] = 1
         end
 
-        if should_fill_with_silence(word_phonemes, silent_intervals, sequence_length, length(words))
-            fill_with_silence!(words, phonemes, silence_symbol, sequence_length - length(words))
+        if should_fill_with_silence(word_phonemes, silent_intervals, seq_length, length(words))
+            fill_with_silence!(words, phonemes, silence, seq_length - length(words))
         else
-            word_count[word] = 1
-        end
-            if length(phs) + silent_intervals > seq_length - _seq_length
-                while _seq_length < seq_length
-                    _seq_length += 1
-                    push!(words, silence_symbol)
-                    push!(phonemes, silence_symbol)
-                end
-                continue
-            end
-            for (i, ph) in enumerate(phs)
-                push!(phonemes, ph)
-                push!(words, word)
-                _seq_length += 1
-
-                # Add the phoneme spacing symbol after each phoneme, except the last
-                if i < length(phs) && !isnothing(vot_duration)
-                    ph_space_symbol = Symbol("_" * string(word))  # Get the matching symbol for ph
-                    push!(phonemes, ph_space_symbol)  # Add space symbol
-                    push!(words, word)  # Null for spacing
-                    _seq_length += 1
-                end
-            end
-            for _ = 1:silent_intervals
-                push!(words, silence_symbol)
-                push!(phonemes, silence_symbol)
-                _seq_length += 1
+            append_word_and_phonemes_vot!(words, phonemes, current_word, word_phonemes, silence, silent_intervals)
         end
     end
+    @assert length(words) == seq_length
+    @assert length(phonemes) == seq_length
 
-    return words, phonemes
+    return words, phonemes, seq_length
 end
 
 
@@ -218,6 +198,25 @@ function append_word_and_phonemes!(words, phonemes, word, phonemes_list, silence
     end
 end
 
+function append_word_and_phonemes_vot!(words, phonemes, word, phonemes_list, silence_symbol, silent_intervals)
+    for (i, ph) in enumerate(phonemes_list)
+        if i < length(phonemes_list)
+            push!(phonemes, ph)
+            push!(words, word)
+            push!(phonemes, Symbol("#" * string(word)))
+            push!(words, word)
+        else
+            push!(phonemes, ph)
+            push!(words, word)
+        end
+    end
+
+    for _ = 1:silent_intervals
+        push!(words, silence_symbol)
+        push!(phonemes, silence_symbol)
+    end
+end
+
 # function silence_sequence!(seq::Encoding)
 #     @assert(length(seq.populations) == seq.silence)
 #     @assert(seq.populations[seq.silence] == [])
@@ -294,19 +293,34 @@ function step_input_sequence(;
 end
 
 function randomize_sequence!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
-    new_seq = generate_sequence(lexicon, word_phonemes_sequence; kwargs...)
+    new_seq = generate_sequence(word_phonemes_sequence, lexicon=lexicon; kwargs...)
     @unpack stim = model
     for target in targets
-        for s in seq.symbols.words
-            word =Symbol(string(s,"_",t)) 
-            get(stim, word, error("Access to non-existing word")).param.variables[:intervals] = sign_intervals(s, new_seq)
+        for s in new_seq.symbols.words
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
             if !words 
-                get(stim, word, error("Access to non-existing word")).param.active[1] = false
+                getfield(stim, Symbol(string(s,"_",target)) ).param.active[1] = false
             end
         end
         for s in lexicon.symbols.phonemes
-            ph = Symbol(string(s,"_",target))
-            get(stim, ph, error()).param.variables[:intervals] = sign_intervals(s, new_seq)
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+        end
+    end
+    return new_seq
+end
+
+function randomize_sequence_vot!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
+    new_seq = generate_sequence(vot_sequence, lexicon=lexicon; kwargs...)
+    @unpack stim = model
+    for target in targets
+        for s in new_seq.symbols.words
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+            if !words 
+                getfield(stim, Symbol(string(s,"_",target)) ).param.active[1] = false
+            end
+        end
+        for s in lexicon.symbols.phonemes
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
         end
     end
     return new_seq
@@ -365,4 +379,4 @@ end
 # scatter(new_seq.sequence[1,:], seq.sequence[1,:], label="New sequence", c=:black, alpha=0.01, ms=10)
 
 
-export step_input_sequence, randomize_sequence!, dummy_input, attack_decay, update_sequence!, word_phonemes_sequence
+export step_input_sequence, randomize_sequence!, dummy_input, attack_decay, update_sequence!, word_phonemes_sequence, vot_sequence, randomize_sequence_vot!

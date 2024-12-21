@@ -1,6 +1,7 @@
 using LIBSVM
 using MLJ
 using CategoricalArrays
+using StatsBase
     
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
@@ -32,7 +33,7 @@ function SVCtrain(Xs, ys; seed=123, p=0.6)
     @assert size(Xtrain, 2) == length(ytrain)
     # classifier = svmtrain(Xtrain, ytrain)
     SVMClassifier = MLJ.@load SVC pkg=LIBSVM
-    svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
+    svm = SVMClassifier(;kernel=LIBSVM.Kernel.Linear)
     mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) |> MLJ.fit!
 
     # Test model on the other half of the data.

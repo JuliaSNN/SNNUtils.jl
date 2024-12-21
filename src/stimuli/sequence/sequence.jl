@@ -68,7 +68,13 @@ function generate_sequence(seq_function::Function; init_silence=1s, lexicon::Nam
     for (n, (w, p)) in enumerate(zip(words, phonemes))
         sequence[1, 1+n] = w
         sequence[2, 1+n] = p
-        sequence[3, 1+n] = ph_duration[p]
+        if startswith(String(p), "#")
+            min, max = ph_duration[p]
+            vot_duration = rand(min:max)
+            sequence[3, 1+n] = Float32(vot_duration)
+        else
+            sequence[3, 1+n] = ph_duration[p]
+        end
     end
 
     line_id = (phonemes=2, words=1, duration=3)
@@ -77,7 +83,6 @@ function generate_sequence(seq_function::Function; init_silence=1s, lexicon::Nam
                 line_id = line_id)
 
 end
-
 
 """
     sign_intervals(sign::Symbol, sequence)
@@ -222,6 +227,14 @@ function getdictionary(words::Vector{T }) where T <: Union{String, Symbol}
     Dict(Symbol(word) => [Symbol(letter) for letter in string(word)] for word in words)
 end
 
+function getdictionary_vot(words::Vector{T}, phonemes_list::Vector{Vector{String}}) where T <: Union{String, Symbol}
+    dictionary = Dict{Symbol,Any}()
+    for (word, phonemes) in zip(words, phonemes_list)
+        push!(dictionary, Symbol(word) => [Symbol(phoneme) for phoneme in phonemes])
+    end
+    return dictionary
+end
+
 """
     getphonemes(dictionary::Dict{Symbol, Vector{Symbol}})
 
@@ -234,6 +247,12 @@ Get a vector of symbols representing all the unique phonemes in the given `dicti
 A vector of symbols representing all the unique phonemes in the given `dictionary`.
 """
 function getphonemes(dictionary::Dict{Symbol, Vector{Symbol}})
+    phs = collect(unique(vcat(values(dictionary)...)))
+    push!(phs, :_)
+    return phs
+end
+
+function getphonemes_vot(dictionary::Dict{Symbol, Any})
     phs = collect(unique(vcat(values(dictionary)...)))
     push!(phs, :_)
     return phs
@@ -254,6 +273,20 @@ A dictionary mapping each phoneme to the specified `duration`.
 function getduration(dictionary::Dict{Symbol, Vector{Symbol}}, duration::R) where R <: Real
     phonemes = getphonemes(dictionary)
     Dict(Symbol(phoneme) => Float32(duration) for phoneme in phonemes)
+end
+
+function getduration_vot(dictionary::Dict{Symbol, Any}, duration::R, vot_durations) where R <: Real
+    phonemes = getphonemes_vot(dictionary)
+    durations = Dict{Symbol,Any}()
+    for phoneme in phonemes
+        push!(durations, Symbol(phoneme) => Float32(duration))
+    end
+
+    for (word, range) in zip(keys(dictionary), vot_durations)
+        vot_symbol = Symbol("#" * string(word))
+        push!(durations, vot_symbol => range)
+    end
+    return durations
 end
 
 """
@@ -286,4 +319,4 @@ end
 
 export getstim, getstimsym
 
-export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getduration, getphonemes, symbolnames, getcells, all_intervals
+export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getdictionary_vot, getduration, getduration_vot, getphonemes, symbolnames, getcells, all_intervals
