@@ -271,7 +271,7 @@ function step_input_sequence(;
                     variables=variables)
         push!(stim, s =>Dict{Symbol,Any}())
         for t in targets
-            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="w_$s", p_post=p_post))
+            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="w_$s", p_post=p_post))
             if !words
                 stim[s][t].param.active[1] = false
             end
@@ -284,7 +284,7 @@ function step_input_sequence(;
         push!(stim, s =>Dict{Symbol,Any}())
         for t in targets
             # ph = Symbol(string(s,"_",t))
-            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", p_post=p_post) 
+            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="$s", p_post=p_post) 
             )
         end
     end

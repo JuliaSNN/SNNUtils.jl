@@ -279,7 +279,11 @@ function getduration_vot(dictionary::Dict{Symbol, Any}, duration::R, vot_duratio
     phonemes = getphonemes_vot(dictionary)
     durations = Dict{Symbol,Any}()
     for phoneme in phonemes
-        push!(durations, Symbol(phoneme) => Float32(duration))
+        if phoneme == Symbol("_")
+            push!(durations, Symbol(phoneme) => Float32(200ms))
+        else
+            push!(durations, Symbol(phoneme) => Float32(duration))
+        end
     end
 
     for (word, range) in zip(keys(dictionary), vot_durations)

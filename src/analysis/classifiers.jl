@@ -22,7 +22,7 @@ function SVCtrain(Xs, ys; seed=123, p=0.6)
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
-    train, test = partition(eachindex(y), p, rng=seed)
+    train, test = partition(eachindex(y), p, shuffle=true, rng=seed)
 
     ZScore = fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
     Xtrain = StatsBase.transform(ZScore, X[:,train])
@@ -41,7 +41,7 @@ function SVCtrain(Xs, ys; seed=123, p=0.6)
     # ŷ, classes = svmpredict(classifier, Xtest);
     
     # @info "Accuracy: $(mean(ŷ .== ytest) * 100)"
-    return mean(ŷ .== ytest)
+    return mean(ŷ .== ytest), ŷ, ytest
 end
 
 """
@@ -107,7 +107,7 @@ The function computes the activity of the spiking neural network model for each 
 ## Arguments
 - `model`: The spiking neural network model, containg the target.
 - `seq`: The sequence of symbols to be recognized.
-- `interval`: The time interval during which the activity is measured. Default is `[0ms, 100ms]`.
+- `interval`: The time interval during which the activity is measured. Default is `[0ms, 100ms]`. 0 being the offset
 - `pop`: The population whose spike will be computed. Default is `:E`.
 
 ## Returns
@@ -131,6 +131,7 @@ function score_activity(model, seq, interval=[0ms, 100ms]; pop=:E)
         activated = argmax(activity)
         confusion_matrix[activated, word_id] += 1
     end
+
     return confusion_matrix./occurences'
 end
 
@@ -170,6 +171,29 @@ function MultinomialLogisticRegression(
     return scores, params
 end
 
+function compute_confusion_matrix(ŷ, ytest)
+    classes = unique(vcat(ŷ, ytest))  # All unique classes (predicted and true)
+    n_classes = length(classes)
+    
+    # Map each class to an index for matrix construction
+    class_to_idx = Dict(c => i for (i, c) in enumerate(classes))
+    
+    # Initialize the confusion matrix
+    confusion_matrix = zeros(Int, n_classes, n_classes)
+    
+    # Populate the confusion matrix
+    for (pred, true_label) in zip(ŷ, ytest)
+        pred_idx = class_to_idx[pred]
+        true_idx = class_to_idx[true_label]
+        confusion_matrix[pred_idx, true_idx] += 1
+    end
+
+    class_totals = sum(confusion_matrix, dims=1)  # Column-wise totals
+    confusion_matrix = confusion_matrix ./ class_totals
+    
+    return confusion_matrix
+end
 
 
-export SVCtrain, spikecount_features, sym_features, score_activity
+
+export SVCtrain, spikecount_features, sym_features, score_activity, compute_confusion_matrix
