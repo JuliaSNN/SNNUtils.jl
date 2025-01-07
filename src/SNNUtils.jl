@@ -24,6 +24,7 @@ include("stimuli/base.jl")
 include("models/models.jl")
 include("analysis/performance.jl")
 include("analysis/classifiers.jl")
+include("analysis/EI_balance.jl")
 
 function __init__()
     # @require Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80" include("plot.jl")

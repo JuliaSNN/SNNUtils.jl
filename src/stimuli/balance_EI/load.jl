@@ -55,3 +55,13 @@ tripod_balance = let
     soma = (kie=balance_kie_soma, models = opt_kies_soma) 
     (dend=dend, soma=soma)
 end
+
+function get_kie(kie, n, l; nmda=false)
+    if nmda
+        return kie.nmda[n, l]
+    else
+        return kie.ampa[n, l]
+    end
+end
+
+export tripod_balance, get_kie
