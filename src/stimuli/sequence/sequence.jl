@@ -84,6 +84,45 @@ function generate_sequence(seq_function::Function; init_silence=1s, lexicon::Nam
 
 end
 
+function generate_sequence_inhpop(seq_function::Function; init_silence=1s, lexicon::NamedTuple, kwargs...)
+
+    words, phonemes, seq_length = seq_function(;
+                        lexicon=lexicon,
+                        kwargs...
+                    )
+
+    @unpack dict, symbols, silence, ph_duration = lexicon
+    ## create the populations
+    ## sequence from the initial word sequence
+    sequence = Matrix{Any}(fill(silence, 4, seq_length+1))
+    sequence[1, 1] = silence
+    sequence[2, 1] = silence
+    sequence[3, 1] = init_silence
+    sequence[4, 1] = silence
+    for (n, (w, p)) in enumerate(zip(words, phonemes))
+        sequence[1, 1+n] = w
+        sequence[2, 1+n] = p
+        if startswith(String(p), "#")
+            min, max = ph_duration[p]
+            vot_duration = rand(min:max)
+            sequence[3, 1+n] = Float32(vot_duration)
+        else
+            sequence[3, 1+n] = ph_duration[p]
+        end
+        if startswith(String(w), "_")
+            sequence[4, 1+n] =  w
+        else
+            sequence[4, 1+n] =  Symbol("I3_" * string(w))
+        end
+    end
+
+    line_id = (phonemes=2, words=1, duration=3, inh_pop=4)
+    sequence = (;lexicon...,
+                sequence=sequence,
+                line_id = line_id)
+
+end
+
 """
     sign_intervals(sign::Symbol, sequence)
 

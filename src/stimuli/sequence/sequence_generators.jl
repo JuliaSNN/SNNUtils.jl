@@ -282,10 +282,56 @@ function step_input_sequence(;
         param = PSParam(rate=attack_decay, 
                     variables=variables)
         push!(stim, s =>Dict{Symbol,Any}())
+        for t in targets            
+            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="$s", p_post=p_post))
+        end
+    end
+    stim = dict2ntuple(stim)
+    stim, seq
+end
+
+function step_input_sequence_inhpop(;
+    generator_function::Function = word_phonemes_sequence, # function to generate the sequence
+    seq=nothing, # optionally provide a sequence    
+    network::NamedTuple, # network object
+    words::Bool,  # active or inactive word inputs
+    ## Projection parameters
+    targets::Vector{Symbol},  # target neuron's compartments
+    p_post::Real,  # probability of post_synaptic projection
+    peak_rate::Real, # peak rate of the stimulus
+    start_rate::Real, # start rate of the stimulus
+    decay_rate::Real, # decay rate of attack-peak function
+    proj_strength::Real, # strength of the synaptic projection
+    kwargs...
+    )
+
+    @unpack E, I3 = network.pop
+    seq = isnothing(seq) ? generate_sequence_inhpop(generator_function; kwargs...) : seq
+
+    stim = Dict{Symbol,Any}()
+    parameters = Dict(:decay=>decay_rate, :peak=>peak_rate, :start=>start_rate)
+
+    for s in seq.symbols.words
+        variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
+        param = PSParam(rate=attack_decay, 
+                    variables=variables)
+        push!(stim, s =>Dict{Symbol,Any}())
+        push!(stim, Symbol("I3_" * string(s)) =>Dict{Symbol,Any}())
         for t in targets
-            # ph = Symbol(string(s,"_",t))
-            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="$s", p_post=p_post) 
-            )
+            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="w_$s", p_post=p_post))
+            if !words
+                stim[s][t].param.active[1] = false
+            end
+        end
+        push!(stim[Symbol("I3_" * string(s))], :s  => SNN.PoissonStimulus(I3, :he, N=300, μ=proj_strength, param=param, name="i3_$s", p_post=0.3))
+    end
+    for s in seq.symbols.phonemes
+        variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
+        param = PSParam(rate=attack_decay, 
+                    variables=variables)
+        push!(stim, s =>Dict{Symbol,Any}())
+        for t in targets            
+            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="$s", p_post=p_post))
         end
     end
     stim = dict2ntuple(stim)
@@ -311,6 +357,23 @@ end
 
 function randomize_sequence_vot!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
     new_seq = generate_sequence(vot_sequence, lexicon=lexicon; kwargs...)
+    @unpack stim = model
+    for target in targets
+        for s in new_seq.symbols.words
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+            if !words 
+                getfield(stim, Symbol(string(s,"_",target)) ).param.active[1] = false
+            end
+        end
+        for s in lexicon.symbols.phonemes
+            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+        end
+    end
+    return new_seq
+end
+
+function randomize_sequence_vot_inhpop!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
+    new_seq = generate_sequence_inhpop(vot_sequence, lexicon=lexicon; kwargs...)
     @unpack stim = model
     for target in targets
         for s in new_seq.symbols.words
@@ -379,4 +442,4 @@ end
 # scatter(new_seq.sequence[1,:], seq.sequence[1,:], label="New sequence", c=:black, alpha=0.01, ms=10)
 
 
-export step_input_sequence, randomize_sequence!, dummy_input, attack_decay, update_sequence!, word_phonemes_sequence, vot_sequence, randomize_sequence_vot!
+export step_input_sequence, randomize_sequence!, dummy_input, attack_decay, update_sequence!, word_phonemes_sequence, vot_sequence, randomize_sequence_vot!, randomize_sequence_vot_inhpop!
