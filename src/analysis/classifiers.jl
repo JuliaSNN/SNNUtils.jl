@@ -1,6 +1,8 @@
 using LIBSVM
 using MLJ
 using CategoricalArrays
+using StatsBase
+using MultivariateStats
     
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
@@ -173,6 +175,27 @@ function MultinomialLogisticRegression(
     return scores, params
 end
 
+function symbols_to_int(symbols::Vector{Symbol})
+    v = unique(symbols)
+    n = length(v)
+    symbols_int = zeros(Int, length(symbols))
+    for i in eachindex(symbols)
+        symbols_int[i] = findfirst(==(symbols[i]), v)
+    end
+    return symbols_int
+end
+
+function standardize(data::Matrix)
+    dt = StatsBase.fit(StatsBase.ZScoreTransform, data, dims=2)
+    return StatsBase.transform(dt, data)
+end
+
+# Function to perform PCA and return the PCA matrix and principal components
+function do_pca(data::Matrix)
+    data = standardize(data, )
+    pca_result = fit(PCA, data;)
+    return pca_result
+end
 
 
-export SVCtrain, spikecount_features, sym_features, score_activity
+export SVCtrain, spikecount_features, sym_features, score_activity, pca
