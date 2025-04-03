@@ -306,19 +306,19 @@ function step_input_sequence(;
 end
 
 function randomize_sequence!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
-    new_seq = generate_sequence(lexicon, word_phonemes_sequence; kwargs...)
+    new_seq = generate_sequence(word_phonemes_sequence; lexicon, kwargs...)
     @unpack stim = model
     for target in targets
-        for s in seq.symbols.words
-            word =Symbol(string(s,"_",t)) 
-            get(stim, word, error("Access to non-existing word")).param.variables[:intervals] = sign_intervals(s, new_seq)
+        for s in lexicon.symbols.words
+            word =Symbol(string(s,"_",target)) 
+            stim[word].param.variables[:intervals] = sign_intervals(s, new_seq)
             if !words 
-                get(stim, word, error("Access to non-existing word")).param.active[1] = false
+                stim[word].param.active[1] = false
             end
         end
         for s in lexicon.symbols.phonemes
             ph = Symbol(string(s,"_",target))
-            get(stim, ph, error()).param.variables[:intervals] = sign_intervals(s, new_seq)
+            stim[ph].param.variables[:intervals] = sign_intervals(s, new_seq)
         end
     end
     return new_seq
