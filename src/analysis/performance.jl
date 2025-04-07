@@ -1,15 +1,15 @@
-function evaluate(population, intervals::Vector{Vector{Float32}}, target::Symbol, neurons::Dict{Symbol,Any} = Dict())
-    count = 0
-    for time_interval in intervals
-        interval_range = range(first(time_interval), stop=last(time_interval), length=length(time_interval))
-        firing_rates = Dict(w => mean(SNN.average_firing_rate(population; interval=interval_range, pop=neurons[w])) for w in keys(neurons))
+# function evaluate(population, intervals::Vector{Vector{Float32}}, target::Symbol, neurons::Dict{Symbol,Any} = Dict())
+#     count = 0
+#     for time_interval in intervals
+#         interval_range = range(first(time_interval), stop=last(time_interval), length=length(time_interval))
+#         firing_rates = Dict(w => mean(SNN.average_firing_rate(population; interval=interval_range, pop=neurons[w])) for w in keys(neurons))
 
-        if all(firing_rates[target] > firing_rates[w] for w in keys(neurons) if w != target)
-            count += 1
-        end
-    end
-    return count / length(intervals)
-end
+#         if all(firing_rates[target] > firing_rates[w] for w in keys(neurons) if w != target)
+#             count += 1
+#         end
+#     end
+#     return count / length(intervals)
+# end
 
 function average_weight(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SNN.SpikingSynapse)
     @unpack W = synapse
@@ -62,4 +62,5 @@ function update_weight!(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{I
     end
 end
 
-export evaluate, average_weight, update_weight!, weights_indices
+# export evaluate, 
+export average_weight, update_weight!, weights_indices

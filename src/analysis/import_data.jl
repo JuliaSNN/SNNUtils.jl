@@ -35,7 +35,7 @@ function import_data(; note::String = "", dir = "models", root = "")
     return _df
 end
 
-function get_path(store, folder_name)
+function model_path_name(store, folder_name)
     path = joinpath(store.path, folder_name)
     (!isdir(path)) && (mkdir(path))
     return path
