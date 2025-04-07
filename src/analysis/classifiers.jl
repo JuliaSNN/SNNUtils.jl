@@ -35,20 +35,21 @@ function SVCtrain(Xs, ys; seed=123, p=0.6)
     # classifier = svmtrain(Xtrain, ytrain)
     machine_loaded = false
     mach = nothing
-    while !machine_loaded 
-        machine_loaded = begin
-            try
-                SVMClassifier = MLJ.@load SVC pkg=LIBSVM verbosity=0
-                svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
-                mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) 
-                true
-            catch e
-                @warn "SVMLIB not loaded on worker $(getpid())"
-                sleep(5)
-                false
-            end
-        end
-    end
+
+    SVMClassifier = MLJ.@load SVC pkg=LIBSVM verbosity=0
+    svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
+    mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) 
+    # while !machine_loaded 
+    #     machine_loaded = begin
+    #         try
+    #             true
+    #         catch e
+    #             @warn "SVMLIB not loaded on worker $(getpid())"
+    #             sleep(5)
+    #             false
+    #         end
+    #     end
+    # end
     MLJ.fit!(mach, verbosity=0)
 
     # Test model on the other half of the data.
