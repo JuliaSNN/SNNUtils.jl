@@ -18,7 +18,7 @@ using MultivariateStats
 
 
 """
-function SVCtrain(Xs, ys; seed=123, p=0.6)
+function SVCtrain(Xs, ys; seed=123, p=0.3)
     X = Xs .+ 1e-1
     y = string.(ys)
     y = CategoricalVector(string.(ys))
