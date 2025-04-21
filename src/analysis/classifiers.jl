@@ -1,5 +1,5 @@
 using LIBSVM
-using MLJ
+using MLJBase
 using CategoricalArrays
 using StatsBase
 using MultivariateStats
@@ -18,41 +18,41 @@ using MultivariateStats
 
 
 """
-function SVCtrain(Xs, ys; seed=123, p=0.3)
+function SVCtrain(Xs, ys; seed=123, p=0.5)
     X = Xs .+ 1e-1
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
     train, test = partition(eachindex(y), p, rng=seed, stratify=y)
 
-    ZScore = fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
+    ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
     Xtrain = StatsBase.transform(ZScore, X[:,train])
     Xtest = StatsBase.transform(ZScore, X[:,test])
     ytrain = y[train]
     ytest = y[test]
 
     @assert size(Xtrain, 2) == length(ytrain)
-    # classifier = svmtrain(Xtrain, ytrain)
-    machine_loaded = false
-    mach = nothing
+    mach = svmtrain(Xtrain, ytrain)
+    ŷ, decision_values = svmpredict(mach, Xtest);
+    return mean(ŷ .== ytest)
 
-    try
-        SVMClassifier = MLJ.@load SVC pkg=LIBSVM verbosity=0
-        svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
-        mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) 
-    catch
-        @warn "SVC not loaded -  wait 5s"
-        sleep(5)
-        return
-    end
-    MLJ.fit!(mach, verbosity=0)
+    # try
+            # machine_loaded = false
+            # mach = nothing
+    #     # SVMClassifier = MLJ.@load SVC pkg=LIBSVM verbosity=0
+    #     # svm = LIBSVM.SVC() # Use the scikit-like interface
+    #     # svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
+    #     # MLJ.fit!(mach, verbosity=0)
+    #     # mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) 
+    # catch
+    #     @warn "SVC not loaded -  wait 5s"
+    #     sleep(5)
+    #     return
+    # end
 
-    # Test model on the other half of the data.
-    ŷ = MLJ.predict(mach, Xtest');
     # ŷ, classes = svmpredict(classifier, Xtest);
     
     # @info "Accuracy: $(mean(ŷ .== ytest) * 100)"
-    return mean(ŷ .== ytest)
 end
 
 """
