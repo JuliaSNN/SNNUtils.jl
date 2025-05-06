@@ -1,5 +1,5 @@
 using LIBSVM
-using MLJBase
+using MLJ
 using CategoricalArrays
 using StatsBase
 using MultivariateStats
@@ -18,8 +18,8 @@ using MultivariateStats
 
 
 """
-function SVCtrain(Xs, ys; seed=123, p=0.5)
-    X = Xs .+ 1e-1
+function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
+    X = Xs .+ 1e-2
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
@@ -32,9 +32,32 @@ function SVCtrain(Xs, ys; seed=123, p=0.5)
     ytest = y[test]
 
     @assert size(Xtrain, 2) == length(ytrain)
-    mach = svmtrain(Xtrain, ytrain)
+    mach = svmtrain(Xtrain, ytrain, kernel=Kernel.Linear)
     ŷ, decision_values = svmpredict(mach, Xtest);
-    return mean(ŷ .== ytest)
+    if labels
+        return ŷ, ytest, mean(ŷ .== ytest)
+    else
+        return mean(ŷ .== ytest)
+    end
+end
+
+function trial_average(array::Array, sequence::Vector, dim::Int=-1)
+    trial_dim = dim < 0 ? ndims(array) : dim
+    my_dims = collect(size(array))
+    popat!(my_dims, trial_dim)
+    labels = unique(sequence) |> sort
+    spatial_code = zeros(Float32, my_dims..., length(labels))
+    ave_dim = ndims(spatial_code)
+
+    for i in eachindex(labels)
+        sound = labels[i]
+        sound_ids = findall(==(sound), sequence)
+        selectdim(spatial_code, ave_dim, i) .= mean(selectdim(array, trial_dim, sound_ids), dims=ave_dim)
+    end
+    return spatial_code, labels
+end
+
+export trial_average
 
     # try
             # machine_loaded = false
@@ -53,7 +76,6 @@ function SVCtrain(Xs, ys; seed=123, p=0.5)
     # ŷ, classes = svmpredict(classifier, Xtest);
     
     # @info "Accuracy: $(mean(ŷ .== ytest) * 100)"
-end
 
 """
     spikecount_features(pop::T, offsets::Vector)  where T <: AbstractPopulation
@@ -194,8 +216,8 @@ function symbols_to_int(symbols)
     return symbols_int
 end
 
-function standardize(data::Matrix)
-    dt = StatsBase.fit(StatsBase.ZScoreTransform, data, dims=2)
+function standardize(data::Matrix, dim=1)
+    dt = StatsBase.fit(StatsBase.ZScoreTransform, data, dims=dim)
     return StatsBase.transform(dt, data)
 end
 
