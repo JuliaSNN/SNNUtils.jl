@@ -71,8 +71,8 @@ dendritic_stp_network = let
         τw = 144ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     )
     plasticity = (
-        iSTDP_rate = SNN.iSTDPParameterRate(η = 0.2, τy = 10ms, r=10Hz, Wmax = 200.0pF, Wmin = 2.78pF),
-        iSTDP_potential =SNN.iSTDPParameterPotential(η = 0.2, v0 = -70mV, τy = 20ms, Wmax = 200.0pF, Wmin = 2.78pF),
+        iSTDP_rate = SNN.iSTDPRate(η = 0.2, τy = 10ms, r=10Hz, Wmax = 200.0pF, Wmin = 2.78pF),
+        iSTDP_potential =SNN.iSTDPPotential(η = 0.2, v0 = -70mV, τy = 20ms, Wmax = 200.0pF, Wmin = 2.78pF),
         vstdp = SNN.vSTDPParameter(
                 A_LTD = 4.0f-4,  #ltd strength
                 A_LTP = 14.0f-4, #ltp strength
