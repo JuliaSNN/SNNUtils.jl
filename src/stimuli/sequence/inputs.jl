@@ -40,7 +40,7 @@ function step_input(;
     
     for s in lexicon.symbols.words
         param = PSParam(rate=attack_decay, 
-                    variables=variables)
+                    variables=copy(variables))
         _my_targets = Dict{Symbol,Any}()
         for t in targets
             key = isnothing(t) ? :v : t 
@@ -55,7 +55,7 @@ function step_input(;
     end
     for s in lexicon.symbols.phonemes
         param = PSParam(rate=attack_decay, 
-                    variables=variables)
+                    variables=copy(variables))
         push!(stim, s =>Dict{Symbol,Any}())
         _my_targets = Dict{Symbol,Any}()
         for t in targets
@@ -87,15 +87,19 @@ function set_stimuli!(;model, targets::Vector{Symbol}, seq, words=true, phonemes
 end
 
 function update_stimuli!(;seq, model, targets::Vector{Symbol})
-    @unpack stim = model
     for target in targets
-        for s in seq.symbols.words
-            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, seq)
+        for w in seq.symbols.words
+            s = Symbol(string(w,"_",target)) 
+            ints = copy(sign_intervals(w, seq))
+            model.stim[s].param.variables[:intervals] = ints
         end
-        for s in seq.symbols.phonemes
-            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, seq)
+        for p in seq.symbols.phonemes
+            s = Symbol(string(p,"_",target)) 
+            ints = copy(sign_intervals(p, seq))
+            model.stim[s].param.variables[:intervals] = ints
         end
     end
+    return model
 end
 
 
