@@ -51,7 +51,7 @@ Generate a sequence of words and phonemes based on the provided lexicon and conf
 A named tuple containing the lexicon information and the generated sequence.
 
 """
-function generate_sequence(seq_function::Function; init_silence=1s, lexicon::NamedTuple, seed=-1, kwargs...)
+function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1, kwargs...)
     (seed > 0) && (Random.seed!(seed))
 
     words, phonemes, seq_length = seq_function(;
@@ -65,7 +65,7 @@ function generate_sequence(seq_function::Function; init_silence=1s, lexicon::Nam
     sequence = Matrix{Any}(fill(silence, 3, seq_length+1))
     sequence[1, 1] = silence
     sequence[2, 1] = silence
-    sequence[3, 1] = init_silence
+    sequence[3, 1] = ph_duration[silence]
     for (n, (w, p)) in enumerate(zip(words, phonemes))
         sequence[1, 1+n] = w
         sequence[2, 1+n] = p
