@@ -129,7 +129,7 @@ function sym_features(sym::Symbol, pop::T, offsets::Vector) where T <: SNN.Abstr
 end
 
 """
-    score_activity(model, seq, interval=[0ms, 100ms])
+    score_spikes(model, seq, interval=[0ms, 100ms])
 
 Compute the most active population in a given interval with respect to the offset time of the input presented, then compute the confusion matrix.
 
@@ -139,36 +139,55 @@ The function computes the activity of the spiking neural network model for each 
 
 ## Arguments
 - `model`: The spiking neural network model, containg the target.
-- `seq`: The sequence of symbols to be recognized.
-- `interval`: The time interval during which the activity is measured. Default is `[0ms, 100ms]`.
+- `seq`::NamedTuple the sequence object with the order of presentations. It must contains:
+    - `line_id`: The line id of the seq.sequence.
+    - `sequence`: An array with: [words, offset, interval_type, onset_time, offset_time]. 
+- `target_interval`::Symbol The type of interval to be used for the target. Default is `:offset`.
 - `pop`: The population whose spike will be computed. Default is `:E`.
 
 ## Returns
+- `score`: The score of the model, which is the difference between the activity of the most active population and a random score.
 - `confusion_matrix`: The confusion matrix, normalized by the number of occurrences of each symbol in the sequence. The matrix has (predicted x true) dimensions.
 """
-function score_activity(model, seq, interval=[0ms, 100ms]; pop=:E, targets=nothing)
-    offsets, ys = all_intervals(:words, seq, interval=interval)
-    S = spikecount_features(getfield(model.pop,pop), offsets)
-    confusion_matrix= zeros(length(seq.symbols.words), length(seq.symbols.words))
-    activity = zeros(length(seq.symbols.words))
-    occurences = zeros(length(seq.symbols.words))
-    for y in eachindex(ys)
-        word = ys[y]
-        word_id = findfirst(==(word), seq.symbols.words)
-        occurences[word_id] += 1
-        for w in eachindex(seq.symbols.words)
-            word_test = seq.symbols.words[w]
-            neurons = []
-            for target in targets
-                append!(neurons, getstim(model.stim, word_test, target).neurons)
-            end
-            activity[w] = mean(S[neurons, y])
-        end
-        activated = argmax(activity)
-        confusion_matrix[activated, word_id] += 1
+function score_spikes(model, seq, target_interval=:offset, pop=:E)
+    ## Get word intervals 
+    offsets_ids = findall(seq.sequence[seq.line_id.type,:].==target_interval)
+    words = seq.sequence[seq.line_id.words, offsets_ids]
+    offset_times = seq.sequence[seq.line_id.offset, offsets_ids]
+
+    if isempty(offsets_ids) 
+        throw("No target intervals found in sequence")
     end
-    return confusion_matrix./occurences'
+    ## Get word assemblies
+    labels, neurons = subpopulations(filter(x->!occursin("noise",x.name), model.stim))
+    word_assemblies = Dict(Symbol(labels[n][3:end])=> neurons[n] for n in eachindex(labels) if startswith(labels[n], "w_")) |> dict2ntuple
+    word_list = keys(word_assemblies) |> collect |> sort
+    word_count = [count(x->x==word, words) for word in word_list]
+    assemblies = [word_assemblies[word] for word in word_list]
+
+    my_lock = Threads.SpinLock()
+    confusion_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
+    _spikes = spiketimes(model.pop[pop])
+    spike_count, r = bin_spiketimes(_spikes, time_range=offset_times[1]:10ms:offset_times[end]+100ms)
+    @inbounds @fastmath Threads.@threads :static  for i in eachindex(offsets_ids)
+        target_word = findfirst(word_list.==words[i])
+        target_interval= offset_times[i] .+ (-50ms:25ms:51ms)
+        _spikes = sum(spike_count[:, 
+                            findall(x->(r[x]>target_interval[1] && r[x]<target_interval[2]), eachindex(r))
+                            ],
+                    dims=2)[:,1]
+
+        # for word in eachindex(word_list)
+        lock(my_lock)
+        confusion_matrix[:, target_word] .+=  mean.([_spikes[x] for x in assemblies])
+        unlock(my_lock)
+    end
+
+    rand_score = rand(length(word_assemblies), length(word_assemblies))
+    score = tr(confusion_matrix) / sum(confusion_matrix) - tr(rand_score) / sum(rand_score)
+    return score, copy(confusion_matrix')
 end
+
 
 
 
@@ -229,4 +248,4 @@ function do_pca(data::Matrix)
 end
 
 
-export SVCtrain, spikecount_features, sym_features, score_activity, pca
+export SVCtrain, spikecount_features, sym_features, score_spikes, pca

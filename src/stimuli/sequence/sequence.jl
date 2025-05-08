@@ -62,7 +62,7 @@ function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1,
     @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
     ## sequence from the initial word sequence
-    sequence = Matrix{Any}(fill(silence, 3, seq_length+1))
+    sequence = Matrix{Any}(fill(silence, 6, seq_length+1))
     sequence[1, 1] = silence
     sequence[2, 1] = silence
     sequence[3, 1] = ph_duration[silence]
@@ -72,7 +72,27 @@ function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1,
         sequence[3, 1+n] = ph_duration[p]
     end
 
-    line_id = (phonemes=2, words=1, duration=3)
+    sequence[4, :] .= :mid
+    for n in axes(sequence, 2)[1:end-2]
+        if !(sequence[1, n+1] == sequence[1, n])
+            sequence[4, 1+n] = :onset
+        end
+        if !(sequence[1, n+1] == sequence[1, n+2])
+            sequence[4, 1+n] = :offset
+            j = 2
+            while !(sequence[4, n+1 - j] == :onset)
+                sequence[4, 1+n-j] = Symbol("offset$j")
+                j += 1
+            end
+            sequence
+        end
+        (sequence[1, n] == :_) && (sequence[4, n] = :silence)
+    end
+
+    sequence[5,:] .= [0ms,cumsum(sequence[3,2:end])...]
+    sequence[6,:] .= [cumsum(sequence[3,1:end])...]
+
+    line_id = (words=1, phonemes=2, duration=3, type=4, onset=5, offset=6)
     sequence = (;lexicon...,
                 sequence=sequence,
                 line_id = line_id)
