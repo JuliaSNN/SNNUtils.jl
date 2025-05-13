@@ -3,6 +3,7 @@ using MLJ
 using CategoricalArrays
 using StatsBase
 using MultivariateStats
+using LinearAlgebra
     
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
@@ -167,25 +168,29 @@ function score_spikes(model, seq, target_interval=:offset, pop=:E)
 
     my_lock = Threads.SpinLock()
     confusion_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
+    activity_matrix  = zeros(Float32, length(word_assemblies), length(word_assemblies))
     _spikes = spiketimes(model.pop[pop])
-    spike_count, r = bin_spiketimes(_spikes, time_range=offset_times[1]:10ms:offset_times[end]+100ms)
-    @inbounds @fastmath Threads.@threads :static  for i in eachindex(offsets_ids)
+    spike_count, r = bin_spiketimes(_spikes, time_range=0:10ms:offset_times[end]+100ms)
+    @inbounds @fastmath for i in eachindex(offsets_ids)
         target_word = findfirst(word_list.==words[i])
-        target_interval= offset_times[i] .+ (-50ms:25ms:51ms)
-        _spikes = sum(spike_count[:, 
-                            findall(x->(r[x]>target_interval[1] && r[x]<target_interval[2]), eachindex(r))
-                            ],
-                    dims=2)[:,1]
+        target_interval= offset_times[i] .+ (-50ms:1ms:50ms)#(-50ms:25ms:51ms)
+        r_idx = findall(x->(r[x]>target_interval[1] && r[x]<target_interval[end]), eachindex(r))
+        _spikes = sum(spike_count[:, r_idx], dims=2)[:,1]
 
-        # for word in eachindex(word_list)
         lock(my_lock)
-        confusion_matrix[:, target_word] .+=  mean.([_spikes[x] for x in assemblies])
+        for word in eachindex(word_list)
+            activity_matrix[word, target_word] += mean(_spikes[assemblies[word]]) / word_count[target_word]
+        end
+        confusion_matrix[argmax(mean.([_spikes[assemblies[word]] for word in eachindex(word_list)])), target_word] += 1/ word_count[target_word]
         unlock(my_lock)
     end
 
     rand_score = rand(length(word_assemblies), length(word_assemblies))
-    score = tr(confusion_matrix) / sum(confusion_matrix) - tr(rand_score) / sum(rand_score)
-    return score, copy(confusion_matrix')
+    z= tr(rand_score)/sum(rand_score) 
+    score = (tr(confusion_matrix)/sum(confusion_matrix) - z) / (1 - z)
+
+
+    return score, copy(confusion_matrix), copy(activity_matrix)
 end
 
 
