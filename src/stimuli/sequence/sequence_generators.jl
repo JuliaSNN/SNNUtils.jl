@@ -290,48 +290,146 @@ function step_input_sequence(;
     stim, seq
 end
 
-function step_input_sequence_inhpop(;
+function step_input_sequence_cells(;
     generator_function::Function = word_phonemes_sequence, # function to generate the sequence
     seq=nothing, # optionally provide a sequence    
     network::NamedTuple, # network object
     words::Bool,  # active or inactive word inputs
+    phonemes::Bool,  # active or inactive phoneme inputs
     ## Projection parameters
-    targets::Vector{Symbol},  # target neuron's compartments
-    p_post::Real,  # probability of post_synaptic projection
+    targets::Vector{},  # target neuron's compartments
     peak_rate::Real, # peak rate of the stimulus
     start_rate::Real, # start rate of the stimulus
     decay_rate::Real, # decay rate of attack-peak function
     proj_strength::Real, # strength of the synaptic projection
+    group_size::Int,
     kwargs...
     )
 
-    @unpack E, I3 = network.pop
-    seq = isnothing(seq) ? generate_sequence_inhpop(generator_function; kwargs...) : seq
+    @unpack E = network.pop
+    seq = isnothing(seq) ? generate_sequence(generator_function; kwargs...) : seq
 
     stim = Dict{Symbol,Any}()
     parameters = Dict(:decay=>decay_rate, :peak=>peak_rate, :start=>start_rate)
 
+    # Define named group indices
+    symbol_to_indeces = Dict(
+        :B => 1:group_size,
+        :V => group_size+1:2*group_size,
+        :GAP => 2*group_size+1:3*group_size,
+        :COINC => 3*group_size+1:4*group_size
+    )
+
     for s in seq.symbols.words
-        variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
-        param = PSParam(rate=attack_decay, 
-                    variables=variables)
-        push!(stim, s =>Dict{Symbol,Any}())
-        push!(stim, Symbol("I3_" * string(s)) =>Dict{Symbol,Any}())
-        for t in targets
-            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="w_$s", p_post=p_post))
+        variables = merge(parameters, Dict(:intervals => sign_intervals(s, seq)))
+        param = PSParam(rate = attack_decay, variables = variables)
+        push!(stim, s => Dict{Symbol, Any}())
+        if !isempty(targets)
+            for t in targets
+                push!(stim[s], t => SNN.PoissonStimulus(E, :he, t, μ = proj_strength, param = param, name = "$s", cells = symbol_to_indeces[s]))
+                if !words
+                    stim[s][t].param.active[1] = false
+                end
+            end
+        else
+            push!(stim[s], :s => SNN.PoissonStimulus(E, :he, μ = proj_strength, param = param, name = "$s", cells = symbol_to_indeces[s]))
             if !words
-                stim[s][t].param.active[1] = false
+                stim[s][:s].param.active[1] = false
             end
         end
-        push!(stim[Symbol("I3_" * string(s))], :s  => SNN.PoissonStimulus(I3, :he, N=300, μ=proj_strength, param=param, name="i3_$s", p_post=0.3))
     end
     for s in seq.symbols.phonemes
-        variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
-        param = PSParam(rate=attack_decay, 
-                    variables=variables)
-        push!(stim, s =>Dict{Symbol,Any}())
-        for t in targets            
-            push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, N=300, μ=proj_strength, param=param, name="$s", p_post=p_post))
+        if !startswith(String(s), "#")
+            variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
+            param = PSParam(rate=attack_decay, 
+                        variables=variables)
+            push!(stim, s =>Dict{Symbol,Any}())
+            if !isempty(targets)
+                for t in targets       
+                    push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", cells = symbol_to_indeces[s]))
+                    if !phonemes
+                        stim[s][t].param.active[1] = false
+                    end
+                end
+            else
+                push!(stim[s], :s => SNN.PoissonStimulus(E, :he, μ = proj_strength, param = param, name = "$s", cells = symbol_to_indeces[s]))
+                if !phonemes
+                    stim[s][:s].param.active[1] = false
+                end
+            end
+        end
+    end
+    stim = dict2ntuple(stim)
+    stim, seq
+end
+
+function step_input_sequence_cells_vot(;
+    generator_function::Function = word_phonemes_sequence, # function to generate the sequence
+    seq=nothing, # optionally provide a sequence    
+    network::NamedTuple, # network object
+    words::Bool,  # active or inactive word inputs
+    phonemes::Bool,  # active or inactive phoneme inputs
+    ## Projection parameters
+    targets::Vector{},  # target neuron's compartments
+    peak_rate::Real, # peak rate of the stimulus
+    start_rate::Real, # start rate of the stimulus
+    decay_rate::Real, # decay rate of attack-peak function
+    proj_strength::Real, # strength of the synaptic projection
+    group_size::Int,
+    kwargs...
+    )
+
+    @unpack E = network.pop
+    seq = isnothing(seq) ? generate_sequence_vot(generator_function; kwargs...) : seq
+
+    stim = Dict{Symbol,Any}()
+    parameters = Dict(:decay=>decay_rate, :peak=>peak_rate, :start=>start_rate)
+
+    # Define named group indices
+    symbol_to_indeces = Dict(
+        :B => 1:group_size,
+        :V => group_size+1:2*group_size,
+        :GAP => 2*group_size+1:3*group_size,
+        :COINC => 3*group_size+1:4*group_size
+    )
+
+    for s in seq.symbols.words
+        variables = merge(parameters, Dict(:intervals => sign_intervals(s, seq)))
+        param = PSParam(rate = attack_decay, variables = variables)
+        push!(stim, s => Dict{Symbol, Any}())
+        if !isempty(targets)
+            for t in targets
+                push!(stim[s], t => SNN.PoissonStimulus(E, :he, t, μ = proj_strength, param = param, name = "$s", cells = symbol_to_indeces[s]))
+                if !words
+                    stim[s][t].param.active[1] = false
+                end
+            end
+        else
+            push!(stim[s], :s => SNN.PoissonStimulus(E, :he, μ = proj_strength, param = param, name = "$s", cells = symbol_to_indeces[s]))
+            if !words
+                stim[s][:s].param.active[1] = false
+            end
+        end
+    end
+    for s in seq.symbols.phonemes
+        if !startswith(String(s), "#")
+            variables = merge(parameters, Dict(:intervals=>sign_intervals(s, seq)))
+            param = PSParam(rate=attack_decay, 
+                        variables=variables)
+            push!(stim, s =>Dict{Symbol,Any}())
+            if !isempty(targets)
+                for t in targets       
+                    push!(stim[s], t  => SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", cells = symbol_to_indeces[s]))
+                    if !phonemes
+                        stim[s][t].param.active[1] = false
+                    end
+                end
+            else
+                push!(stim[s], :s => SNN.PoissonStimulus(E, :he, μ = proj_strength, param = param, name = "$s", cells = symbol_to_indeces[s]))
+                if !phonemes
+                    stim[s][:s].param.active[1] = false
+                end
+            end
         end
     end
     stim = dict2ntuple(stim)
@@ -355,7 +453,7 @@ function randomize_sequence!(;lexicon, model, targets::Vector{Symbol}, words=tru
     return new_seq
 end
 
-function randomize_sequence_vot!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
+function randomize_sequence_vot!(;lexicon, model, targets::Vector{}, words=true, kwargs...)
     new_seq = generate_sequence(vot_sequence, lexicon=lexicon; kwargs...)
     @unpack stim = model
     for target in targets
@@ -366,14 +464,17 @@ function randomize_sequence_vot!(;lexicon, model, targets::Vector{Symbol}, words
             end
         end
         for s in lexicon.symbols.phonemes
-            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+            if !startswith(String(s), "#")
+                getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+                
+            end
         end
     end
     return new_seq
 end
 
-function randomize_sequence_vot_inhpop!(;lexicon, model, targets::Vector{Symbol}, words=true, kwargs...)
-    new_seq = generate_sequence_inhpop(vot_sequence, lexicon=lexicon; kwargs...)
+function randomize_sequence_vot_select!(;lexicon, model, selected_phoneme::Symbol, targets::Vector{Symbol}, words=true, kwargs...)
+    new_seq = generate_sequence(vot_sequence, lexicon=lexicon; kwargs...)
     @unpack stim = model
     for target in targets
         for s in new_seq.symbols.words
@@ -383,11 +484,18 @@ function randomize_sequence_vot_inhpop!(;lexicon, model, targets::Vector{Symbol}
             end
         end
         for s in lexicon.symbols.phonemes
-            getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+            if !startswith(String(s), "#")
+                getfield(stim, Symbol(string(s,"_",target)) ).param.variables[:intervals] = sign_intervals(s, new_seq)
+                if s != selected_phoneme
+                    getfield(stim, Symbol(string(s,"_",target)) ).param.active[1] = false
+                end
+                
+            end
         end
     end
     return new_seq
 end
+
 
 function update_sequence!(;seq, model, targets::Vector{Symbol}, words=true, kwargs...)
     @unpack stim = model
@@ -442,4 +550,4 @@ end
 # scatter(new_seq.sequence[1,:], seq.sequence[1,:], label="New sequence", c=:black, alpha=0.01, ms=10)
 
 
-export step_input_sequence, randomize_sequence!, dummy_input, attack_decay, update_sequence!, word_phonemes_sequence, vot_sequence, randomize_sequence_vot!, randomize_sequence_vot_inhpop!
+export step_input_sequence, randomize_sequence!, dummy_input, attack_decay, update_sequence!, word_phonemes_sequence, vot_sequence, randomize_sequence_vot!, randomize_sequence_vot_inhpop!, randomize_sequence_vot_select!

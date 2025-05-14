@@ -23,9 +23,26 @@ function generate_lexicon(config)
 
     all_words = collect(keys(dictionary)) |> Set |> collect |> sort |> Vector{Symbol}
     all_phonemes = collect(values(dictionary)) |> Iterators.flatten |> Set |> collect |> sort |> Vector{Symbol}
-    symbols = collect(union(all_words,all_phonemes))
 
-    ## Add the silence symbol
+    ## Add the silence symbolstarts
+    silence_symbol = :_
+
+    return (dict=dictionary, 
+            symbols=(phonemes = all_phonemes, 
+            words = all_words), 
+            ph_duration = ph_duration, 
+            silence = silence_symbol)
+end
+
+function generate_lexicon_vot(config)
+    @unpack ph_duration, dictionary = config
+
+    all_words = collect(keys(dictionary)) |> Set |> collect |> sort |> Vector{Symbol}
+    all_phonemes = collect(values(dictionary)) |> Iterators.flatten |> Set |> collect |> sort |> Vector{Symbol}
+    for word in all_words
+        push!(all_phonemes, Symbol("#$word"))
+    end
+    ## Add the silence symbolstarts
     silence_symbol = :_
 
     return (dict=dictionary, 
@@ -51,7 +68,7 @@ Generate a sequence of words and phonemes based on the provided lexicon and conf
 A named tuple containing the lexicon information and the generated sequence.
 
 """
-function generate_sequence(seq_function::Function; init_silence=1s, lexicon::NamedTuple, kwargs...)
+function generate_sequence(seq_function::Function; lexicon::NamedTuple,  init_silence=1s, end_slience=1ms, kwargs...)
 
     words, phonemes, seq_length = seq_function(;
                         lexicon=lexicon,
@@ -61,21 +78,27 @@ function generate_sequence(seq_function::Function; init_silence=1s, lexicon::Nam
     @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
     ## sequence from the initial word sequence
-    sequence = Matrix{Any}(fill(silence, 3, seq_length+1))
+    sequence = Matrix{Any}(fill(silence, 3, seq_length+2))
     sequence[1, 1] = silence
     sequence[2, 1] = silence
     sequence[3, 1] = init_silence
     for (n, (w, p)) in enumerate(zip(words, phonemes))
-        sequence[1, 1+n] = w
-        sequence[2, 1+n] = p
+
         if startswith(String(p), "#")
+            sequence[1, 1+n] = w
+            sequence[2, 1+n] = p
             min, max = ph_duration[p]
-            vot_duration = rand(min:max)
+            vot_duration = rand(range(min, max; step=10))
             sequence[3, 1+n] = Float32(vot_duration)
         else
+            sequence[1, 1+n] = w
+            sequence[2, 1+n] = p
             sequence[3, 1+n] = ph_duration[p]
         end
     end
+    sequence[1, end] = silence
+    sequence[2, end] = silence
+    sequence[3, end] = end_slience
 
     line_id = (phonemes=2, words=1, duration=3)
     sequence = (;lexicon...,
@@ -84,7 +107,7 @@ function generate_sequence(seq_function::Function; init_silence=1s, lexicon::Nam
 
 end
 
-function generate_sequence_inhpop(seq_function::Function; init_silence=1s, lexicon::NamedTuple, kwargs...)
+function generate_sequence_vot(seq_function::Function; lexicon::NamedTuple, init_silence=1s, end_slience=1ms, kwargs...) 
 
     words, phonemes, seq_length = seq_function(;
                         lexicon=lexicon,
@@ -94,29 +117,33 @@ function generate_sequence_inhpop(seq_function::Function; init_silence=1s, lexic
     @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
     ## sequence from the initial word sequence
-    sequence = Matrix{Any}(fill(silence, 4, seq_length+1))
+    sequence = Matrix{Any}(fill(silence, 3, seq_length+2))
     sequence[1, 1] = silence
     sequence[2, 1] = silence
     sequence[3, 1] = init_silence
-    sequence[4, 1] = silence
     for (n, (w, p)) in enumerate(zip(words, phonemes))
-        sequence[1, 1+n] = w
-        sequence[2, 1+n] = p
+        
         if startswith(String(p), "#")
+            sequence[1, 1+n] = silence
+            sequence[2, 1+n] = p
             min, max = ph_duration[p]
-            vot_duration = rand(min:max)
+            vot_duration = rand(range(min, max; step=10))
             sequence[3, 1+n] = Float32(vot_duration)
+        elseif sequence[2, n]  == silence
+            sequence[1, 1+n] = silence
+            sequence[2, 1+n] = p
+            sequence[3, 1+n] = ph_duration[p]
         else
+            sequence[1, 1+n] = w
+            sequence[2, 1+n] = p
             sequence[3, 1+n] = ph_duration[p]
         end
-        if startswith(String(w), "_")
-            sequence[4, 1+n] =  w
-        else
-            sequence[4, 1+n] =  Symbol("I3_" * string(w))
-        end
     end
+    sequence[1, end] = silence
+    sequence[2, end] = silence
+    sequence[3, end] = end_slience
 
-    line_id = (phonemes=2, words=1, duration=3, inh_pop=4)
+    line_id = (phonemes=2, words=1, duration=3)
     sequence = (;lexicon...,
                 sequence=sequence,
                 line_id = line_id)
@@ -311,7 +338,15 @@ A dictionary mapping each phoneme to the specified `duration`.
 """
 function getduration(dictionary::Dict{Symbol, Vector{Symbol}}, duration::R) where R <: Real
     phonemes = getphonemes(dictionary)
-    Dict(Symbol(phoneme) => Float32(duration) for phoneme in phonemes)
+    durations = Dict{Symbol,Any}()
+    for phoneme in phonemes
+        if phoneme == Symbol("_")
+            push!(durations, Symbol(phoneme) => Float32(200ms))
+        else
+            push!(durations, Symbol(phoneme) => Float32(duration))
+        end
+    end
+    return durations
 end
 
 function getduration_vot(dictionary::Dict{Symbol, Any}, duration::R, vot_durations) where R <: Real
@@ -343,7 +378,7 @@ function symbolnames(seq)
     phonemes = String[]
     words = String[]
     [push!(phonemes, string.(ph)) for ph in seq.symbols.phonemes]
-    [push!(words, "w_"*string(w)) for w in seq.symbols.words]
+    [push!(words, string(w)) for w in seq.symbols.words] # CHANGED: removed w_
     return (phonemes=phonemes, words=words)
 end
 
@@ -362,4 +397,4 @@ end
 
 export getstim, getstimsym
 
-export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getdictionary_vot, getduration, getduration_vot, getphonemes, symbolnames, getcells, all_intervals
+export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, generate_lexicon_vot, start_interval, getdictionary, getdictionary_vot, getduration, getduration_vot, getphonemes, symbolnames, getcells, all_intervals

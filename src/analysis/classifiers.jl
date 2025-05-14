@@ -41,7 +41,7 @@ function SVCtrain(Xs, ys; seed=123, p=0.6)
     # ŷ, classes = svmpredict(classifier, Xtest);
     
     # @info "Accuracy: $(mean(ŷ .== ytest) * 100)"
-    return mean(ŷ .== ytest), ŷ, ytest
+    return mean(ŷ .== ytest), ŷ, ytest, test
 end
 
 """
@@ -135,6 +135,64 @@ function score_activity(model, seq, interval=[0ms, 100ms]; pop=:E)
     return confusion_matrix./occurences'
 end
 
+function score_activity_disjoint(model, seq, interval=[0ms, 100ms]; pops=[:E_GAP, :E_COINC], target=:d) # CHANGED added target
+    offsets, ys = all_intervals(:words, seq, interval=interval)
+    confusion_matrix = zeros(length(seq.symbols.words), length(seq.symbols.words))
+    occurences = zeros(length(seq.symbols.words))
+        
+    for y in eachindex(ys)
+        word = ys[y]
+        activity = zeros(length(seq.symbols.words))
+        for pop in pops
+            S = spikecount_features(getfield(model.pop, pop), offsets)
+            word_test = string(pop)[3:end]
+            cells = getstim(model.stim, word_test, target).cells 
+            word_id = findfirst(==(Symbol(word_test)), seq.symbols.words)
+            activity[word_id] = mean(S[cells, y])
+        end
+        activated = argmax(activity)
+        word_id = findfirst(==(word), seq.symbols.words)
+        occurences[word_id] += 1
+        confusion_matrix[activated, word_id] += 1
+    end
+
+    return confusion_matrix ./ occurences'
+end
+
+function score_activity_stack(model, seq; interval=[0ms, 200ms], pops=[:E_GAP, :E_COINC], target=:d, step_size = 10ms, window_size = 20ms)
+    start_time, end_time = interval
+    num_steps = Int((end_time - start_time) / step_size) + 1
+    println(num_steps)
+    num_words = length(seq.symbols.words)
+    confusion_stack = [zeros(num_words, num_words) for _ in 1:num_steps]
+    occurrences_stack = [zeros(num_words) for _ in 1:num_steps]
+
+    step = 1
+    for start in interval[1]:step_size:interval[2]
+        offsets, ys = all_intervals(:words, seq, interval=[start, start+window_size])
+        current_interval = [start, start+20ms]
+        println(current_interval)
+        
+        for y in eachindex(ys)
+            word = ys[y]
+            activity = zeros(num_words)
+            for pop in pops
+                S = spikecount_features(getfield(model.pop, pop), offsets)
+                word_test = string(pop)[3:end]
+                cells = getstim(model.stim, word_test, target).cells 
+                word_id = findfirst(==(Symbol(word_test)), seq.symbols.words)
+                activity[word_id] = mean(S[cells, y])
+            end
+            activated = argmax(activity)
+            word_id = findfirst(==(word), seq.symbols.words)
+            occurrences_stack[step][word_id] += 1
+            confusion_stack[step][activated, word_id] += 1
+        end
+        step += 1
+    end
+
+    return [confusion ./ occurrences' for (confusion, occurrences) in zip(confusion_stack, occurrences_stack)]
+end
 
 
 function MultinomialLogisticRegression(
@@ -196,4 +254,4 @@ end
 
 
 
-export SVCtrain, spikecount_features, sym_features, score_activity, compute_confusion_matrix
+export SVCtrain, spikecount_features, sym_features, score_activity, compute_confusion_matrix, score_activity_disjoint, score_activity_stack

@@ -81,6 +81,8 @@ function weights_indices(pre_pop_cells::Vector{Int}, post_pop_cells::Vector{Int}
             st = index[st]
             if (J[st] in pre_pop_cells)
                 push!(indices, st)
+            elseif isempty(pre_pop_cells)
+                push!(indices, st)
             end
         end
     end
