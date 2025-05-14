@@ -1,5 +1,5 @@
 
-function get_model(L, NAR, Nd; Vs=-55) where R <: Real
+function get_model(L, NAR, Nd; Vs=-55) 
     ps = SNN.PostSpike(A= 10.0,τA= 30.0)
     adex = AdExSoma( C=281pF, gl=40nS, Vr = -70.6, Er = -70.6, ΔT = 2, Vt = 1000.f0, a = 4, b = 80.5, τw = 144, up = 1ms, τabs= 1ms)
     dend_syn = EyalEquivalentNAR(NAR) |> SNN.synapsearray

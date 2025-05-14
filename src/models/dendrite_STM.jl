@@ -71,8 +71,8 @@ dendritic_stp_network = let
         τw = 144ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     )
     plasticity = (
-        iSTDP_rate = SNN.iSTDPParameterRate(η = 0.2, τy = 10ms, r=10Hz, Wmax = 200.0pF, Wmin = 2.78pF),
-        iSTDP_potential =SNN.iSTDPParameterPotential(η = 0.2, v0 = -70mV, τy = 20ms, Wmax = 200.0pF, Wmin = 2.78pF),
+        iSTDP_rate = SNN.iSTDPRate(η = 0.2, τy = 10ms, r=10Hz, Wmax = 200.0pF, Wmin = 2.78pF),
+        iSTDP_potential =SNN.iSTDPPotential(η = 0.2, v0 = -70mV, τy = 20ms, Wmax = 200.0pF, Wmin = 2.78pF),
         vstdp = SNN.vSTDPParameter(
                 A_LTD = 4.0f-4,  #ltd strength
                 A_LTP = 14.0f-4, #ltp strength
@@ -88,24 +88,24 @@ dendritic_stp_network = let
 
     )
     connectivity = (
-        EdE = (p = 0.2,  μ = 10.78, dist = Normal, σ = 1),
-        IfE = (p = 0.2,  μ = log(15.27),  dist = LogNormal, σ = 0.),
-        IsE = (p = 0.2,  μ = log(15.27),  dist = LogNormal, σ = 0.),
+        E_to_Ed = (p = 0.2,  μ = 10.78, dist = Normal, σ = 1),
+        E_to_If = (p = 0.2,  μ = log(15.27),  dist = LogNormal, σ = 0.),
+        E_to_Is = (p = 0.2,  μ = log(15.27),  dist = LogNormal, σ = 0.),
 
-        EIf = (p = 0.2,  μ = log(15.8), dist = LogNormal, σ = 0.),
-        IsIf = (p = 0.2, μ = log(0.83),  dist = LogNormal, σ = 0.),
-        IfIf = (p = 0.2, μ = log(16.2), dist = LogNormal, σ = 0.),
+        If_to_E = (p = 0.2,  μ = log(15.8), dist = LogNormal, σ = 0.),
+        If_to_Is = (p = 0.2, μ = log(0.83),  dist = LogNormal, σ = 0.),
+        If_to_If = (p = 0.2, μ = log(16.2), dist = LogNormal, σ = 0.),
 
-        EdIs = (p = 0.2, μ = log(15.8), dist = LogNormal, σ = 0.),
-        IfIs = (p = 0.2, μ = log(1.47), dist = LogNormal, σ = 0.),
-        IsIs = (p = 0.2, μ = log(16.2), dist = LogNormal, σ = 0.),
+        Is_to_Ed = (p = 0.2, μ = log(15.8), dist = LogNormal, σ = 0.),
+        Is_to_If = (p = 0.2, μ = log(1.47), dist = LogNormal, σ = 0.),
+        Is_to_Is = (p = 0.2, μ = log(16.2), dist = LogNormal, σ = 0.),
     )
 
     noise_params = let
-        exc_soma = (param=4.0kHz,  μ=2.8f0,  cells=:ALL, name="noise_exc_soma")
-        exc_dend = (param=0.0kHz,  μ=0.f0,  cells=:ALL, name="noise_exc_dend")
-        inh1 = (param=2.5kHz,  μ=2.8f0,  cells=:ALL,     name="noise_inh1")
-        inh2 = (param=3.5kHz,  μ=2.8f0, cells=:ALL,     name="noise_inh2")
+        exc_soma = (param=4.0kHz,  μ=2.8f0,  neurons=:ALL, name="noise_exc_soma")
+        exc_dend = (param=0.0kHz,  μ=0.f0,  neurons=:ALL, name="noise_exc_dend")
+        inh1 = (param=2.5kHz,  μ=2.8f0,  neurons=:ALL,     name="noise_inh1")
+        inh2 = (param=3.5kHz,  μ=2.8f0, neurons=:ALL,     name="noise_inh2")
         (exc_soma=exc_soma, exc_dend=exc_dend, inh1=inh1, inh2=inh2)
     end
 

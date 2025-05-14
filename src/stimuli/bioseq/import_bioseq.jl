@@ -48,6 +48,7 @@ function make_unique_sequence(epochs, post_silence=1)
         end
         push!(items_in_epoch, length(epoch) + post_silence)
     end
+    replace!(sequence, "#"=>"_")
     @assert(all(length(collection) == length(epochs[1]) for collection in epochs))
     return Symbol.(sequence), items_in_epoch
 end
@@ -135,48 +136,82 @@ function store_experiment_data(path, exp, network, seq)
             sst = network.pop.I2.N
             cumsum([1,exc, sst, pv]) |> x-> [collect(x[n]:(x[n+1]-1)) for n in 1:length(x)-1]
     end
+
     DrWatson.save(joinpath(_root, "mapping.h5"), mapping)
     DrWatson.save(joinpath(_root, "info.h5"), exp_data)
     DrWatson.save(joinpath(_root,"spikeinfo.h5"), @strdict exc = neurons_ranges[1] sst = neurons_ranges[2] pv = neurons_ranges[3])
     return _root
 end
 
+function store_target_pops(_root, seq, stim, targets)
+    folder = _root
+    target_pops = Dict{String, Vector{Int}}()
+    for k in seq.symbols.phonemes
+        neurons = []
+        for t in targets
+            ph_stim = getfield(stim, k)
+            ph_stim = getfield(ph_stim, t)
+            push!(neurons, ph_stim.neurons)
+        end
+        push!(target_pops, string(k)=>Set(vcat(neurons...))|> collect)
+    end
+    for k in seq.symbols.words
+        neurons = []
+        for t in targets
+            ph_stim = getfield(stim, k)
+            ph_stim = getfield(ph_stim, t)
+            push!(neurons, ph_stim.neurons)
+        end
+        push!(target_pops, string(k)=>Set(vcat(neurons...))|> collect)
+    end
+    DrWatson.save(joinpath(folder,"target_pops.h5"), target_pops) 
+    return _root
+end
+
+# function getstim(stim, field, target)
+#     ph_stim = getfield(stim, field)
+#     ph_stim = getfield(ph_stim, target)
+#     return ph_stim
+# end
+
+function store_labels(_root, stim, sequence, targets)
+    folder = _root
+    # Get the labels
+    labels = Dict{}()
+    stim_id =[]
+    stim_time = []
+    for k in sequence.symbols.phonemes
+            # ph_stim = getstim(stim, k, targets[1])
+            ph_stim = getfield(stim,Symbol(string(k,"_",targets[1])))
+            for interval in ph_stim.param.variables[:intervals]
+                    push!(stim_time, interval[1])
+                    push!(stim_id, k)
+            end
+    end
+    iid = sort(1:length(stim_id), by=x->stim_time[x])
+    for (k,t) in zip(stim_id[iid], stim_time[iid])
+            labels[string(t)] = string(k)
+    end
+    DrWatson.save(joinpath(folder,"labels.h5"), labels) 
+    return labels
+end
+
+
+
+
+
 function store_activity_data(_root::String, stage::String, sequence, model; targets=[:d])
     folder = joinpath(_root, stage) |> mkpath
     @unpack stim = model
+    # Get the labels
+    labels = store_labels(folder, stim, sequence, targets)
+
+    # Get the spikes
     myspikes = vcat(spiketimes(model.pop.E), spiketimes(model.pop.I1), spiketimes(model.pop.I2))
     myspikes = myspikes  |> d-> Dict("$n"=>d[n] for n in eachindex(d))
-    labels, target_pops, = let
-            stim_id =[]
-            stim_time = []
-            target_pops = Dict{String, Vector{Int}}()
-            for k in sequence.symbols.phonemes
-                cells = []
-                for t in targets
-                    t = Symbol(string(k,"_",t))
-                    ph_stim = getfield(stim, t)
-                    push!(cells, ph_stim.cells)
-                end
-                push!(target_pops, string(k)=>Set(vcat(cells...))|> collect)
-            end
-            for k in sequence.symbols.phonemes
-                    ph_stim = getfield(stim,Symbol(string(k,"_",targets[1])))
-                    for interval in ph_stim.param.variables[:intervals]
-                            push!(stim_time, interval[1])
-                            push!(stim_id, k)
-                    end
-            end
-            iid = sort(1:length(stim_id), by=x->stim_time[x])
-            labels = Dict{}()
-            for (k,t) in zip(stim_id[iid], stim_time[iid])
-                    labels[string(t)] = string(k)
-            end
-            labels, target_pops
-    end
-    DrWatson.save(joinpath(folder,"labels.h5"), labels) 
-    DrWatson.save(joinpath(folder,"target_pops.h5"), target_pops) 
     DrWatson.save(joinpath(folder,"spiketimes.h5"), myspikes ) 
 
+    # Membrane traces
     membrane, r_t = SNN.interpolated_record(model.pop.E, :v_s)
     epoch_extrema =  cumsum([0,sequence.timestamps...])|> x-> [(x[n],(x[n+1])) for n in 1:length(x)-1]
     @unpack ph_duration = sequence
@@ -205,4 +240,4 @@ function store_activity_data(_root::String, stage::String, sequence, model; targ
 end
 ##
 
-export import_bioseq_tasks, seq_bioseq, bioseq_epochs, bioseq_lexicon, store_experiment_data, store_activity_data, root_path
+export import_bioseq_tasks, seq_bioseq, bioseq_epochs, bioseq_lexicon, store_experiment_data, store_activity_data, root_path, store_target_pops, store_labels

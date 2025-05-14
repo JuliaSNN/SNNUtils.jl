@@ -1,29 +1,27 @@
-using StatsBase
+# function evaluate(population, intervals::Vector{Vector{Float32}}, target::Symbol, neurons::Dict{Symbol,Any} = Dict())
+#     count = 0
+#     for time_interval in intervals
+#         interval_range = range(first(time_interval), stop=last(time_interval), length=length(time_interval))
+#         firing_rates = Dict(w => mean(SNN.average_firing_rate(population; interval=interval_range, pop=neurons[w])) for w in keys(neurons))
 
-function evaluate_avg_firing_rate(population, intervals::Vector{Vector{Float32}}, target::Symbol, cells::Dict{Symbol,Any} = Dict())
-    count = 0
-    for time_interval in intervals
-        interval_range = range(first(time_interval), stop=last(time_interval), length=length(time_interval))
-        firing_rates = Dict(w => mean(SNN.average_firing_rate(population; interval=interval_range, pop=cells[w])) for w in keys(cells))
+#         if all(firing_rates[target] > firing_rates[w] for w in keys(neurons) if w != target)
+#             count += 1
+#         end
+#     end
+#     return count / length(intervals)
+# end
 
-        if all(firing_rates[target] > firing_rates[w] for w in keys(cells) if w != target)
-            count += 1
-        end
-    end
-    return count / length(intervals)
-end
-
-function average_weight(pre_pop_cells::Vector{Int}, post_pop_cells::Vector{Int}, synapse::SNN.SpikingSynapse)
+function average_weight(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SNN.SpikingSynapse)
     @unpack W = synapse
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
     index = synapse.index 
     all_weights = Float32[]  # Store weights for all filtered connections
-    for neuron in post_pop_cells
+    for neuron in post_pop_neurons
         # Get the range in W for this postsynaptic neuron's incoming connections
         for st = rowptr[neuron]:(rowptr[neuron + 1] - 1)
             st = index[st]
-            if (J[st] in pre_pop_cells)
+            if (J[st] in pre_pop_neurons)
                 push!(all_weights, W[st])
             end
         end
@@ -31,55 +29,16 @@ function average_weight(pre_pop_cells::Vector{Int}, post_pop_cells::Vector{Int},
     return mean(all_weights)
 end
 
-function compute_firing_rates_moving_window(pop, 
-    cellss::Vector{Vector{Int64}}, 
-    stimulus_intervals::Vector{Vector{Vector{Float32}}}, 
-    window_shift::Float64, 
-    targets::Vector{Int64})
-    # Number of shifts based on the window shift
-    n_shifts = Int(100ms / window_shift)  
-
-    # Initialize arrays to store features and targets
-    target_labels = []
-    features = [] # To store firing rates
-
-    for (target, intervals) in zip(targets, stimulus_intervals) 
-        append!(target_labels, fill(target, length(intervals)))
-    end
-    
-    for (intervals, cells) in zip(stimulus_intervals, cellss)
-        for interval in intervals
-            firing_rates = Float32[]
-            # Calculate firing rates for each shifted interval
-            for shift_idx in 0:n_shifts-1 
-                start_time, end_time = interval[1] + shift_idx * window_shift, interval[2] + shift_idx * window_shift
-                count = length.(spiketimes(pop, interval=start_time:end_time)[cells]) |>sum
-                # StatsBase.count(spike -> spike >= start_time && spike <= end_time, spike_times)
-                interval_length = end_time - start_time
-                append!(firing_rates, count / interval_length)
-            end
-            push!(features, firing_rates)
-        end
-    end
-
-    dataset = (
-        features = features,    # Array of firing rates (features)
-        targets = target_labels # Vector of targets
-    )
-
-    return dataset
-end
-
-function weights_indices(pre_pop_cells::Vector{Int}, post_pop_cells::Vector{Int}, synapse::SNN.SpikingSynapse)
+function weights_indices(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SNN.SpikingSynapse)
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
     index = synapse.index 
     indices = Int64[]  # Store weights for all filtered connections
-    for neuron in post_pop_cells
+    for neuron in post_pop_neurons
         # Get the range in W for this postsynaptic neuron's incoming connections
         for st = rowptr[neuron]:(rowptr[neuron + 1] - 1)
             st = index[st]
-            if (J[st] in pre_pop_cells)
+            if (J[st] in pre_pop_neurons)
                 push!(indices, st)
             elseif isempty(pre_pop_cells)
                 push!(indices, st)
@@ -89,20 +48,21 @@ function weights_indices(pre_pop_cells::Vector{Int}, post_pop_cells::Vector{Int}
     return indices
 end
 
-function update_weight!(pre_pop_cells::Vector{Int}, post_pop_cells::Vector{Int}, synapse::SNN.SpikingSynapse)
+function update_weight!(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SNN.SpikingSynapse)
     @unpack W = synapse
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
     index = synapse.index 
-    for neuron in post_pop_cells
+    for neuron in post_pop_neurons
         # Get the range in W for this postsynaptic neuron's incoming connections
         for st = rowptr[neuron]:(rowptr[neuron + 1] - 1)
             st = index[st]
-            if (J[st] in pre_pop_cells)
+            if (J[st] in pre_pop_neurons)
                 W[st] *= 1.2
             end
         end
     end
 end
 
-export evaluate, average_weight, update_weight!, weights_indices, compute_firing_rates_moving_window
+# export evaluate, 
+export average_weight, update_weight!, weights_indices

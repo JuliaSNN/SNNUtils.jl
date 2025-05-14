@@ -32,9 +32,9 @@ function population_activity(; path::String, tt0 = 0)
     @inbounds @simd for index in eachindex(spikes)
         # for index in 1:length(spikes)
         previous_inputs = inputs_in_batch * (index - 1)
-        exc = spikes[index].exc # get excitatory cells
-        sst = spikes[index].sst # get excitatory cells
-        pv = spikes[index].pv # get excitatory cells
+        exc = spikes[index].exc # get excitatory neurons
+        sst = spikes[index].sst # get excitatory neurons
+        pv = spikes[index].pv # get excitatory neurons
         last_tt = spikes[index].tt
         input_time = last_tt - store.interval
         input = 0

@@ -2,6 +2,8 @@ using LIBSVM
 using MLJ
 using CategoricalArrays
 using StatsBase
+using MultivariateStats
+using LinearAlgebra
     
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
@@ -17,32 +19,64 @@ using StatsBase
 
 
 """
-function SVCtrain(Xs, ys; seed=123, p=0.6)
-    X = Xs .+ 1e-1
+function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
+    X = Xs .+ 1e-2
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
-    train, test = partition(eachindex(y), p, shuffle=true, rng=seed)
+    train, test = partition(eachindex(y), p, rng=seed, stratify=y)
 
-    ZScore = fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
+    ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
     Xtrain = StatsBase.transform(ZScore, X[:,train])
     Xtest = StatsBase.transform(ZScore, X[:,test])
     ytrain = y[train]
     ytest = y[test]
 
     @assert size(Xtrain, 2) == length(ytrain)
-    # classifier = svmtrain(Xtrain, ytrain)
-    SVMClassifier = MLJ.@load SVC pkg=LIBSVM
-    svm = SVMClassifier(;kernel=LIBSVM.Kernel.Linear)
-    mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) |> MLJ.fit!
+    mach = svmtrain(Xtrain, ytrain, kernel=Kernel.Linear)
+    ŷ, decision_values = svmpredict(mach, Xtest);
+    if labels
+        return ŷ, ytest, mean(ŷ .== ytest)
+    else
+        return mean(ŷ .== ytest)
+    end
+end
 
-    # Test model on the other half of the data.
-    ŷ = MLJ.predict(mach, Xtest');
+function trial_average(array::Array, sequence::Vector, dim::Int=-1)
+    trial_dim = dim < 0 ? ndims(array) : dim
+    my_dims = collect(size(array))
+    popat!(my_dims, trial_dim)
+    labels = unique(sequence) |> sort
+    spatial_code = zeros(Float32, my_dims..., length(labels))
+    ave_dim = ndims(spatial_code)
+
+    for i in eachindex(labels)
+        sound = labels[i]
+        sound_ids = findall(==(sound), sequence)
+        selectdim(spatial_code, ave_dim, i) .= mean(selectdim(array, trial_dim, sound_ids), dims=ave_dim)
+    end
+    return spatial_code, labels
+end
+
+export trial_average
+
+    # try
+            # machine_loaded = false
+            # mach = nothing
+    #     # SVMClassifier = MLJ.@load SVC pkg=LIBSVM verbosity=0
+    #     # svm = LIBSVM.SVC() # Use the scikit-like interface
+    #     # svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
+    #     # MLJ.fit!(mach, verbosity=0)
+    #     # mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) 
+    # catch
+    #     @warn "SVC not loaded -  wait 5s"
+    #     sleep(5)
+    #     return
+    # end
+
     # ŷ, classes = svmpredict(classifier, Xtest);
     
     # @info "Accuracy: $(mean(ŷ .== ytest) * 100)"
-    return mean(ŷ .== ytest), ŷ, ytest, test
-end
 
 """
     spikecount_features(pop::T, offsets::Vector)  where T <: AbstractPopulation
@@ -96,7 +130,7 @@ function sym_features(sym::Symbol, pop::T, offsets::Vector) where T <: SNN.Abstr
 end
 
 """
-    score_activity(model, seq, interval=[0ms, 100ms])
+    score_spikes(model, seq, interval=[0ms, 100ms])
 
 Compute the most active population in a given interval with respect to the offset time of the input presented, then compute the confusion matrix.
 
@@ -106,33 +140,57 @@ The function computes the activity of the spiking neural network model for each 
 
 ## Arguments
 - `model`: The spiking neural network model, containg the target.
-- `seq`: The sequence of symbols to be recognized.
-- `interval`: The time interval during which the activity is measured. Default is `[0ms, 100ms]`. 0 being the offset
+- `seq`::NamedTuple the sequence object with the order of presentations. It must contains:
+    - `line_id`: The line id of the seq.sequence.
+    - `sequence`: An array with: [words, offset, interval_type, onset_time, offset_time]. 
+- `target_interval`::Symbol The type of interval to be used for the target. Default is `:offset`.
 - `pop`: The population whose spike will be computed. Default is `:E`.
 
 ## Returns
+- `score`: The score of the model, which is the difference between the activity of the most active population and a random score.
 - `confusion_matrix`: The confusion matrix, normalized by the number of occurrences of each symbol in the sequence. The matrix has (predicted x true) dimensions.
 """
-function score_activity(model, seq, interval=[0ms, 100ms]; pop=:E)
-    offsets, ys = all_intervals(:words, seq, interval=interval)
-    S = spikecount_features(getfield(model.pop,pop), offsets)
-    confusion_matrix= zeros(length(seq.symbols.words), length(seq.symbols.words))
-    activity = zeros(length(seq.symbols.words))
-    occurences = zeros(length(seq.symbols.words))
-    for y in eachindex(ys)
-        word = ys[y]
-        word_id = findfirst(==(word), seq.symbols.words)
-        occurences[word_id] += 1
-        for w in eachindex(seq.symbols.words)
-            word_test = seq.symbols.words[w]
-            cells = getstim(model.stim, word_test, :d).cells
-            activity[w] = mean(S[cells, y])
+function score_spikes(model, seq, target_interval=:offset, pop=:E)
+    ## Get word intervals 
+    offsets_ids = findall(seq.sequence[seq.line_id.type,:].==target_interval)
+    words = seq.sequence[seq.line_id.words, offsets_ids]
+    offset_times = seq.sequence[seq.line_id.offset, offsets_ids]
+
+    if isempty(offsets_ids) 
+        throw("No target intervals found in sequence")
+    end
+    ## Get word assemblies
+    labels, neurons = subpopulations(filter(x->!occursin("noise",x.name), model.stim))
+    word_assemblies = Dict(Symbol(labels[n][3:end])=> neurons[n] for n in eachindex(labels) if startswith(labels[n], "w_")) |> dict2ntuple
+    word_list = keys(word_assemblies) |> collect |> sort
+    word_count = [count(x->x==word, words) for word in word_list]
+    assemblies = [word_assemblies[word] for word in word_list]
+
+    my_lock = Threads.SpinLock()
+    confusion_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
+    activity_matrix  = zeros(Float32, length(word_assemblies), length(word_assemblies))
+    _spikes = spiketimes(model.pop[pop])
+    spike_count, r = bin_spiketimes(_spikes, time_range=0:10ms:offset_times[end]+100ms)
+    @inbounds @fastmath for i in eachindex(offsets_ids)
+        target_word = findfirst(word_list.==words[i])
+        target_interval= offset_times[i] .+ (-50ms:1ms:50ms)#(-50ms:25ms:51ms)
+        r_idx = findall(x->(r[x]>target_interval[1] && r[x]<target_interval[end]), eachindex(r))
+        _spikes = sum(spike_count[:, r_idx], dims=2)[:,1]
+
+        lock(my_lock)
+        for word in eachindex(word_list)
+            activity_matrix[word, target_word] += mean(_spikes[assemblies[word]]) / word_count[target_word]
         end
-        activated = argmax(activity)
-        confusion_matrix[activated, word_id] += 1
+        confusion_matrix[argmax(mean.([_spikes[assemblies[word]] for word in eachindex(word_list)])), target_word] += 1/ word_count[target_word]
+        unlock(my_lock)
     end
 
-    return confusion_matrix./occurences'
+    rand_score = rand(length(word_assemblies), length(word_assemblies))
+    z= tr(rand_score)/sum(rand_score) 
+    score = (tr(confusion_matrix)/sum(confusion_matrix) - z) / (1 - z)
+
+
+    return score, copy(confusion_matrix), copy(activity_matrix)
 end
 
 function score_activity_disjoint(model, seq, interval=[0ms, 100ms]; pops=[:E_GAP, :E_COINC], target=:d) # CHANGED added target
@@ -195,6 +253,7 @@ function score_activity_stack(model, seq; interval=[0ms, 200ms], pops=[:E_GAP, :
 end
 
 
+
 function MultinomialLogisticRegression(
     X::Matrix{Float64},
     labels::Array{Int64};
@@ -229,29 +288,27 @@ function MultinomialLogisticRegression(
     return scores, params
 end
 
-function compute_confusion_matrix(ŷ, ytest)
-    classes = unique(vcat(ŷ, ytest))  # All unique classes (predicted and true)
-    n_classes = length(classes)
-    
-    # Map each class to an index for matrix construction
-    class_to_idx = Dict(c => i for (i, c) in enumerate(classes))
-    
-    # Initialize the confusion matrix
-    confusion_matrix = zeros(Int, n_classes, n_classes)
-    
-    # Populate the confusion matrix
-    for (pred, true_label) in zip(ŷ, ytest)
-        pred_idx = class_to_idx[pred]
-        true_idx = class_to_idx[true_label]
-        confusion_matrix[pred_idx, true_idx] += 1
+function symbols_to_int(symbols)
+    v = unique(symbols)
+    n = length(v)
+    symbols_int = zeros(Int, length(symbols))
+    for i in eachindex(symbols)
+        symbols_int[i] = findfirst(==(symbols[i]), v)
     end
+    return symbols_int
+end
 
-    class_totals = sum(confusion_matrix, dims=1)  # Column-wise totals
-    confusion_matrix = confusion_matrix ./ class_totals
-    
-    return confusion_matrix
+function standardize(data::Matrix, dim=1)
+    dt = StatsBase.fit(StatsBase.ZScoreTransform, data, dims=dim)
+    return StatsBase.transform(dt, data)
+end
+
+# Function to perform PCA and return the PCA matrix and principal components
+function do_pca(data::Matrix)
+    data = standardize(data, )
+    pca_result = fit(PCA, data;)
+    return pca_result
 end
 
 
-
-export SVCtrain, spikecount_features, sym_features, score_activity, compute_confusion_matrix, score_activity_disjoint, score_activity_stack
+export SVCtrain, spikecount_features, sym_features, score_spikes, pca

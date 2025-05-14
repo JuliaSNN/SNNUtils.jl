@@ -1,5 +1,5 @@
 
-function Mongillo2008(;n_assemblies=1, n_cells=800)
+function Mongillo2008(;n_assemblies=1, n_neurons=800)
     MongilloParam = (
             Exc = IFCurrentDeltaParameter(
             R =1,
@@ -46,9 +46,9 @@ function Mongillo2008(;n_assemblies=1, n_cells=800)
 
     model = SNN.merge_models(pop, syn, stim)
     assemblies= map(1:n_assemblies) do x
-        cells = StatsBase.sample(1:pop.E.N, n_cells, replace=false)
-        update_weights!(syn.EE, cells, cells, μee_assembly)
-        (cells=cells, name=Symbol("assembly$x"), indices= indices(syn.EE, cells, cells), id=x)
+        neurons = StatsBase.sample(1:pop.E.N, n_neurons, replace=false)
+        update_weights!(syn.EE, neurons, neurons, μee_assembly)
+        (neurons=neurons, name=Symbol("assembly$x"), indices= indices(syn.EE, neurons, neurons), id=x)
     end
     return model, assemblies
 end
