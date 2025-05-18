@@ -21,7 +21,7 @@ function word_phonemes_sequence(;
     weights = nothing,
     seed = nothing,
     silent_intervals = 1,
-    repetition::Int,
+    repetitions::Int,
     kwargs...
 )
 
@@ -40,7 +40,7 @@ function word_phonemes_sequence(;
     remaining_words = copy(dict_words)
     make_equal = true
 
-    seq_length = round(Int, length(dict_words)*repetition* mean([length(dict[word]) for word in dict_words]))
+    seq_length = round(Int, length(dict_words)*repetitions* mean([length(dict[word])+ silent_intervals for word in dict_words]))
     while length(words) < seq_length
         current_word = choose_word(make_equal, remaining_words, dict_words, weights, word_frequency)
         word_phonemes = dict[current_word]
@@ -63,72 +63,6 @@ function word_phonemes_sequence(;
     return words, phonemes, seq_length
 end
 
-function vot_sequence(
-    sequence_length::Int,
-    dictionary::Dict{Symbol, Vector{Symbol}},
-    silence_symbol::Symbol;
-    weights = nothing,
-    silent_intervals = 1,
-    vot_duration = nothing
-)
-
-    dict_words = collect(keys(dictionary))
-
-    weights = isnothing(weights) ? fill(1, length(dict_words)) : [weights[word] for word in dict_words]
-    weights = StatsBase.Weights(weights)
-
-    word_frequency = Dict{Symbol,Int}()
-    words, phonemes = [], []
-
-    remaining_words = copy(dict_words)
-    make_equal = true
-
-    sequence_length = round(Int, dict_words*repetition* mean([length(dictionary[word]) for word in dict_words])), 
-    while length(words) < sequence_length
-        current_word = choose_word(make_equal, remaining_words, dict_words, weights, word_frequency)
-        word_phonemes = dictionary[current_word]
-
-        if haskey(word_frequency, current_word)
-            word_frequency[current_word] += 1
-        else
-            word_frequency[current_word] = 1
-        end
-
-        if should_fill_with_silence(word_phonemes, silent_intervals, sequence_length, length(words))
-            fill_with_silence!(words, phonemes, silence_symbol, sequence_length - length(words))
-        else
-            word_count[word] = 1
-        end
-            if length(phs) + silent_intervals > seq_length - _seq_length
-                while _seq_length < seq_length
-                    _seq_length += 1
-                    push!(words, silence_symbol)
-                    push!(phonemes, silence_symbol)
-                end
-                continue
-            end
-            for (i, ph) in enumerate(phs)
-                push!(phonemes, ph)
-                push!(words, word)
-                _seq_length += 1
-
-                # Add the phoneme spacing symbol after each phoneme, except the last
-                if i < length(phs) && !isnothing(vot_duration)
-                    ph_space_symbol = Symbol("_" * string(word))  # Get the matching symbol for ph
-                    push!(phonemes, ph_space_symbol)  # Add space symbol
-                    push!(words, word)  # Null for spacing
-                    _seq_length += 1
-                end
-            end
-            for _ = 1:silent_intervals
-                push!(words, silence_symbol)
-                push!(phonemes, silence_symbol)
-                _seq_length += 1
-        end
-    end
-
-    return words, phonemes
-end
 
 
 """
