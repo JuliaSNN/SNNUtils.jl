@@ -4,6 +4,7 @@ using CategoricalArrays
 using StatsBase
 using MultivariateStats
 using LinearAlgebra
+using StatisticalMeasures
     
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
@@ -24,22 +25,31 @@ function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
-    train, test = partition(eachindex(y), p, rng=seed, stratify=y)
-
-    ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
-    Xtrain = StatsBase.transform(ZScore, X[:,train])
-    Xtest = StatsBase.transform(ZScore, X[:,test])
-    ytrain = y[train]
-    ytest = y[test]
+    if p <1 
+        train, test = partition(eachindex(y), p, rng=seed, stratify=y)
+        ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
+        Xtrain = StatsBase.transform(ZScore, X[:,train])
+        Xtest = StatsBase.transform(ZScore, X[:,test])
+        ytrain = y[train]
+        ytest = y[test]
+    else
+        Xtrain = X
+        Xtest = X
+        ytrain = y
+        ytest = y
+    end
 
     @assert size(Xtrain, 2) == length(ytrain)
     mach = svmtrain(Xtrain, ytrain, kernel=Kernel.Linear)
     ŷ, decision_values = svmpredict(mach, Xtest);
-    if labels
-        return ŷ, ytest, mean(ŷ .== ytest)
-    else
-        return mean(ŷ .== ytest)
-    end
+    confusion_matrix = confmat(ŷ, ytest)
+    score = kappa(confusion_matrix)
+    return score, confusion_matrix
+    # if labels
+    #     return ŷ, ytest, mean(ŷ .== ytest)
+    # else
+    #     return mean(ŷ .== ytest)
+    # end
 end
 
 function trial_average(array::Array, sequence::Vector, dim::Int=-1)
@@ -150,7 +160,7 @@ The function computes the activity of the spiking neural network model for each 
 - `score`: The score of the model, which is the difference between the activity of the most active population and a random score.
 - `confusion_matrix`: The confusion matrix, normalized by the number of occurrences of each symbol in the sequence. The matrix has (predicted x true) dimensions.
 """
-function score_spikes(model, seq, target_interval=:offset, pop=:E)
+function score_spikes(model, seq, target_interval=:offset, delay=nothing, pop=:E)
     ## Get word intervals 
     offsets_ids = findall(seq.sequence[seq.line_id.type,:].==target_interval)
     words = seq.sequence[seq.line_id.words, offsets_ids]
@@ -170,27 +180,45 @@ function score_spikes(model, seq, target_interval=:offset, pop=:E)
     confusion_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
     activity_matrix  = zeros(Float32, length(word_assemblies), length(word_assemblies))
     _spikes = spiketimes(model.pop[pop])
-    spike_count, r = bin_spiketimes(_spikes, time_range=0:10ms:offset_times[end]+100ms)
-    @inbounds @fastmath for i in eachindex(offsets_ids)
-        target_word = findfirst(word_list.==words[i])
-        target_interval= offset_times[i] .+ (-50ms:1ms:50ms)#(-50ms:25ms:51ms)
-        r_idx = findall(x->(r[x]>target_interval[1] && r[x]<target_interval[end]), eachindex(r))
-        _spikes = sum(spike_count[:, r_idx], dims=2)[:,1]
+    spike_count, r = bin_spiketimes(_spikes, interval=0:10ms:offset_times[end]+100ms)
 
-        lock(my_lock)
-        for word in eachindex(word_list)
-            activity_matrix[word, target_word] += mean(_spikes[assemblies[word]]) / word_count[target_word]
+    function _score(delay, test_interval = 0:100)
+        predicted = Symbol[]
+        target = Symbol[]
+        @inbounds @fastmath for i in eachindex(offsets_ids)
+            target_word = findfirst(word_list.==words[i])
+            target_interval= offset_times[i] .+ test_interval .+ delay
+            r_idx = findall(x->(r[x]>target_interval[1] && r[x]<target_interval[end]), eachindex(r))
+            _spikes = sum(spike_count[:, r_idx], dims=2)[:,1]
+
+            lock(my_lock)
+            for word in eachindex(word_list)
+                activity_matrix[word, target_word] += mean(_spikes[assemblies[word]]) / word_count[target_word]
+            end
+            push!(predicted, word_list[argmax(mean.([_spikes[assembly] for assembly in assemblies]))])
+            push!(target, word_list[target_word])
+            unlock(my_lock)
         end
-        confusion_matrix[argmax(mean.([_spikes[assemblies[word]] for word in eachindex(word_list)])), target_word] += 1/ word_count[target_word]
-        unlock(my_lock)
+        confusion_matrix = confmat(target, predicted)
+        score = kappa(confusion_matrix)
+        return score, confusion_matrix, activity_matrix
     end
 
-    rand_score = rand(length(word_assemblies), length(word_assemblies))
-    z= tr(rand_score)/sum(rand_score) 
-    score = (tr(confusion_matrix)/sum(confusion_matrix) - z) / (1 - z)
-
-
-    return score, copy(confusion_matrix), copy(activity_matrix)
+    if !isnothing(delay) 
+        return _score(delay)
+    else
+        delays= -100:10:100
+        scores = Vector{Float32}(undef, length(delays))
+        cms = Vector{Any}(undef, length(delays))
+        for i in eachindex(delays)
+            score, cm, _ = _score(delays[i])
+            scores[i] = score
+            cms[i] = cm
+        end
+        best_score = argmax(scores)
+        best_delay = delays[best_score]
+        return scores, best_delay, (;cms, delays)
+    end
 end
 
 
