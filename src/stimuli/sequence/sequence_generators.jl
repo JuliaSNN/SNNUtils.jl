@@ -226,4 +226,4 @@ end
 #     silence_sequence!(new_seq)
 #     return new_seq
 # end
-export word_phonemes_sequence
+export word_phonemes_sequence, vot_sequence

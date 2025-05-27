@@ -9,7 +9,8 @@
 Christof Koch. Biophysics of Computation: Information Processing in Single Neurons, by.Trends in Neurosciences, 22842(7):328–329, July 1999. ISSN 0166-2236, 1878-108X. doi: 10.1016/S0166-2236(99)01403-4.
 """
 KochGlu =
-    Glutamatergic(Receptor(E_rev = 0.00, τr = 0.2, τd = 25.0, g0 = 0.73), ReceptorVoltage())
+    Glutamatergic(Receptor(E_rev = 0.00, τr = 0.2, τd = 25.0, g0 = 0.73), ReceptorVoltage(gsyn=-1))
+    
 
 
 """
@@ -22,8 +23,8 @@ EyalGluDend = Glutamatergic(
 )
 
 EyalGluDend_nonmda = Glutamatergic(
-    Receptor(E_rev = 0.0, τr = 0.25, τd = 2.0, g0 = 10.0),
-    ReceptorVoltage(E_rev = 0.0, τr = 8, τd = 35.0, g0 = 0.0f0, nmda = 0.0f0),
+    Receptor(E_rev = 0.0, τr = 0.25, τd = 2.0, g0 = .0),
+    ReceptorVoltage(E_rev = 0.0, τr = 8, τd = 35.0, g0 = 0.000f0, nmda = 0.0f0),
 )
 
 
@@ -36,12 +37,15 @@ MilesGabaDend = GABAergic(
 )
 
 MilesGabaSoma =
-    GABAergic(Receptor(E_rev = -70.0, τr = 0.1, τd = 15.0, g0 = 0.38), Receptor()) # E_rev = -75.0, τr = 0.5, τd = 6.0, g0 = 0.265
+    GABAergic(Receptor(E_rev = -75.0, τr = 0.5, τd = 6.0, g0 = 0.265), Receptor(τr=-1))
 
 DuarteGluSoma = Glutamatergic(
-    Receptor(E_rev = 0.0, τr = 0.26, τd = 2.0, g0 = 0.73), # τr = 0.25
-    ReceptorVoltage(E_rev = 0.0, nmda = 0.0f0),
+    Receptor(E_rev = 0.0, τr = 0.25, τd = 2.0, g0 = 0.73),
+    ReceptorVoltage(τr=-1),
+
 )
+
+# EyalNMDA = NMDAVoltageDependency(mg = Mg_mM, b = nmda_b, k = nmda_k)
 
 quaresima2022 = (
         dends  =  [(150um, 400um), (150um, 400um)],
@@ -51,4 +55,4 @@ quaresima2022 = (
         param = AdExSoma(Vr = -55mV, Vt = -50mV),
 )
 
-export quaresima2022
+export quaresima2022, KochGlu, EyalGluDend, EyalNMDA, EyalGluDend_nonmda, MilesGabaDend, MilesGabaSoma, DuarteGluSoma

@@ -21,10 +21,10 @@ function step_input(;
     network::NamedTuple, # network object
     # words::Bool,  # active or inactive word inputs
     # phonemes::Bool=true, # active or inactive phoneme inputs
-
+    pops::Dict{Symbol, Vector{Int64}},
     ## Projection parameters
     targets::Union{Vector{Symbol},Vector{Nothing}},  # target neuron's compartments
-    p_post::Real,  # probability of post_synaptic projection
+    p_post=nothing,  # probability of post_synaptic projection
     peak_rate::Real, # peak rate of the stimulus
     start_rate::Real, # start rate of the stimulus
     decay_rate::Real, # decay rate of attack-peak function
@@ -44,7 +44,12 @@ function step_input(;
         _my_targets = Dict{Symbol,Any}()
         for t in targets
             key = isnothing(t) ? :v : t 
-            my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="w_$s", p_post=p_post) 
+            if isnothing(p_post)
+                my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", neurons=pops[s]) 
+            else
+                my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", p_post=p_post) 
+            end
+            
             push!(_my_targets, key => my_input)
         end
         if length(_my_targets) > 1
@@ -54,49 +59,79 @@ function step_input(;
         end
     end
     for s in lexicon.symbols.phonemes
-        param = PSParam(rate=attack_decay, 
-                    variables=copy(variables))
-        push!(stim, s =>Dict{Symbol,Any}())
-        _my_targets = Dict{Symbol,Any}()
-        for t in targets
-            key = isnothing(t) ? :v : t 
-            my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="p_$s", p_post=p_post) 
-            push!(_my_targets, key => my_input)
-        end
-        if length(_my_targets) > 1
-            push!(stim, s => _my_targets |> dict2ntuple)
-        else
-            push!(stim, s => first(_my_targets)[2] )
+        if !startswith(String(s), "#")
+            param = PSParam(rate=attack_decay, 
+                        variables=copy(variables))
+            push!(stim, s =>Dict{Symbol,Any}())
+            _my_targets = Dict{Symbol,Any}()
+            for t in targets
+                key = isnothing(t) ? :v : t 
+                if isnothing(p_post)
+                    my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", neurons=pops[s]) 
+                else
+                    my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="$s", p_post=p_post) 
+                end
+                push!(_my_targets, key => my_input)
+            end
+            if length(_my_targets) > 1
+                push!(stim, s => _my_targets |> dict2ntuple)
+            else
+                push!(stim, s => first(_my_targets)[2] )
+            end
         end
     end
     return (stim |> dict2ntuple)
 end
 
-function set_stimuli!(;model, targets::Vector{Symbol}, seq, words=true, phonemes=true)
+function set_stimuli!(;model, targets::Vector{}, seq, words=true, phonemes=true)
     @unpack stim = model
     for target in targets
         for s in seq.symbols.words
-            word =Symbol(string(s,"_",target)) 
-            stim[word].param.active[1] = words
+            if isnothing(target)
+                stim[s].param.active[1] = words
+            else
+                word =Symbol(string(s,"_",target)) 
+                stim[word].param.active[1] = words
+            end
+            
         end
         for s in seq.symbols.phonemes
-            ph = Symbol(string(s,"_",target))
-            stim[ph].param.active[1] = phonemes
+            if !startswith(String(s), "#")
+                if isnothing(target)
+                    stim[s].param.active[1] = phonemes
+                else
+                    ph = Symbol(string(s,"_",target))
+                    stim[ph].param.active[1] = phonemes
+                end 
+            end
         end
     end
 end
 
-function update_stimuli!(;seq, model, targets::Vector{Symbol})
+function update_stimuli!(;seq, model, targets::Vector{})
     for target in targets
         for w in seq.symbols.words
-            s = Symbol(string(w,"_",target)) 
-            ints = copy(sign_intervals(w, seq))
-            model.stim[s].param.variables[:intervals] = ints
+            ints = copy(sign_intervals(w, seq, all_simulation=true))
+            if isnothing(target)
+                model.stim[w].param.variables[:intervals] = ints
+            else
+                s = Symbol(string(w,"_",target)) 
+                model.stim[s].param.variables[:intervals] = ints
+            end
+            
+            
+            
         end
         for p in seq.symbols.phonemes
-            s = Symbol(string(p,"_",target)) 
-            ints = copy(sign_intervals(p, seq))
-            model.stim[s].param.variables[:intervals] = ints
+            if !startswith(String(p), "#")
+                ints = copy(sign_intervals(p, seq, all_simulation=true))
+                if isnothing(target)
+                    model.stim[p].param.variables[:intervals] = ints
+                else
+                    s = Symbol(string(p,"_",target)) 
+                    model.stim[s].param.variables[:intervals] = ints
+                end
+            end
         end
     end
     return model

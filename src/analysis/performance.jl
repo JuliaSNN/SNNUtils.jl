@@ -40,8 +40,6 @@ function weights_indices(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{
             st = index[st]
             if (J[st] in pre_pop_neurons)
                 push!(indices, st)
-            elseif isempty(pre_pop_cells)
-                push!(indices, st)
             end
         end
     end

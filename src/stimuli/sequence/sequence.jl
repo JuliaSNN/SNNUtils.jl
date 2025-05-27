@@ -23,8 +23,9 @@ function generate_lexicon(config)
 
     all_words = collect(keys(dictionary)) |> Set |> collect |> sort |> Vector{Symbol}
     all_phonemes = collect(values(dictionary)) |> Iterators.flatten |> Set |> collect |> sort |> Vector{Symbol}
+    symbols = collect(union(all_words,all_phonemes))
 
-    ## Add the silence symbolstarts
+    ## Add the silence symbol
     silence_symbol = :_
 
     return (dict=dictionary, 
@@ -84,36 +85,23 @@ function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1,
     sequence[2, 1] = silence
     sequence[3, 1] = ph_duration[silence]
     for (n, (w, p)) in enumerate(zip(words, phonemes))
-
-        if startswith(String(p), "#")
-            sequence[1, 1+n] = w
-            sequence[2, 1+n] = p
-            min, max = ph_duration[p]
-            vot_duration = rand(range(min, max; step=10))
-            sequence[3, 1+n] = Float32(vot_duration)
-        else
-            sequence[1, 1+n] = w
-            sequence[2, 1+n] = p
-            sequence[3, 1+n] = ph_duration[p]
-        end
+        sequence[1, 1+n] = w
+        sequence[2, 1+n] = p
+        sequence[3, 1+n] = ph_duration[p]
     end
-    sequence[1, end] = silence
-    sequence[2, end] = silence
-    sequence[3, end] = end_slience
 
     sequence[4, :] .= :mid
-    for n in axes(sequence, 2)[1:end-2]
+    for n in 1:(size(sequence, 2)-2)
         if !(sequence[1, n+1] == sequence[1, n])
-            sequence[4, 1+n] = :onset
+            sequence[4, n+1] = :onset
         end
         if !(sequence[1, n+1] == sequence[1, n+2])
-            sequence[4, 1+n] = :offset
+            sequence[4, n+1] = :offset
             j = 2
-            while !(sequence[4, n+1 - j] == :onset)
-                sequence[4, 1+n-j] = Symbol("offset$j")
+            while (n+1-j > 0) && !(sequence[4, n+1-j] == :onset)
+                sequence[4, n+1-j] = Symbol("offset$j")
                 j += 1
             end
-            sequence
         end
         (sequence[1, n] == :_) && (sequence[4, n] = :silence)
     end
@@ -128,7 +116,8 @@ function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1,
 
 end
 
-function generate_sequence_vot(seq_function::Function; lexicon::NamedTuple, init_silence=1s, end_slience=1ms, kwargs...) 
+function generate_sequence_vot(seq_function::Function; lexicon::NamedTuple, init_silence::Real, end_silence::Real, seed=-1, init_time = 0ms, kwargs...)
+    (seed > 0) && (Random.seed!(seed))
 
     words, phonemes, seq_length = seq_function(;
                         lexicon=lexicon,
@@ -138,38 +127,134 @@ function generate_sequence_vot(seq_function::Function; lexicon::NamedTuple, init
     @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
     ## sequence from the initial word sequence
-    sequence = Matrix{Any}(fill(silence, 3, seq_length+2))
+    sequence = Matrix{Any}(fill(silence, 6, seq_length+2))
     sequence[1, 1] = silence
     sequence[2, 1] = silence
     sequence[3, 1] = init_silence
     for (n, (w, p)) in enumerate(zip(words, phonemes))
-        
         if startswith(String(p), "#")
-            sequence[1, 1+n] = silence
+            sequence[1, 1+n] = w # silence
             sequence[2, 1+n] = p
             min, max = ph_duration[p]
             vot_duration = rand(range(min, max; step=10))
             sequence[3, 1+n] = Float32(vot_duration)
-        elseif sequence[2, n]  == silence
-            sequence[1, 1+n] = silence
-            sequence[2, 1+n] = p
-            sequence[3, 1+n] = ph_duration[p]
+        # elseif sequence[2, n]  == silence
+        #     sequence[1, 1+n] = silence
+        #     sequence[2, 1+n] = p
+        #     sequence[3, 1+n] = ph_duration[p]
         else
             sequence[1, 1+n] = w
             sequence[2, 1+n] = p
             sequence[3, 1+n] = ph_duration[p]
         end
     end
+
     sequence[1, end] = silence
     sequence[2, end] = silence
-    sequence[3, end] = end_slience
+    sequence[3, end] = end_silence
 
-    line_id = (phonemes=2, words=1, duration=3)
+    sequence[4, :] .= :mid
+    for n in 1:(size(sequence, 2)-2)
+        if !(sequence[1, n+1] == sequence[1, n])
+            sequence[4, n+1] = :onset
+        end
+        if !(sequence[1, n+1] == sequence[1, n+2])
+            sequence[4, n+1] = :offset
+            j = 2
+            while (n+1-j > 0) && !(sequence[4, n+1-j] == :onset)
+                sequence[4, n+1-j] = Symbol("offset$j")
+                j += 1
+            end
+        end
+        (sequence[1, n] == :_) && (sequence[4, n] = :silence)
+    end
+
+    sequence[5,:] .= [0ms, cumsum(sequence[3,2:end])...] .+ init_time
+    sequence[6,:] .= [cumsum(sequence[3,1:end])...] .+ init_time
+
+    line_id = (words=1, phonemes=2, duration=3, type=4, onset=5, offset=6)
     sequence = (;lexicon...,
                 sequence=sequence,
                 line_id = line_id)
 
 end
+
+
+
+function generate_serial_sequence(repetition::Int, lexicon::NamedTuple, init_silence::Real, end_silence::Real, init_time = 0ms, seed=-1, kwargs...)
+    (seed > 0) && (Random.seed!(seed))
+
+    @unpack dict, symbols, silence, ph_duration = lexicon
+
+    # Number of columns for one pattern: 7 (as in your example)
+    ncols = 7 * repetition + 2  # +2 for initial and final silence
+    sequence = Matrix{Any}(fill(silence, 6, ncols))
+    col = 1
+
+    # Initial silence
+    sequence[1, col] = silence
+    sequence[2, col] = silence
+    sequence[3, col] = init_silence
+    col += 1
+
+    for _ in 1:repetition
+        # :_  :B   20.0
+        sequence[1, col] = silence
+        sequence[2, col] = :B
+        sequence[3, col] = 20.0
+        col += 1
+
+        # :_  :_   20.0
+        sequence[1, col] = silence
+        sequence[2, col] = silence
+        sequence[3, col] = 20.0
+        col += 1
+
+        # :_  :V   20.0
+        sequence[1, col] = silence
+        sequence[2, col] = :V
+        sequence[3, col] = 20.0
+        col += 1
+
+        # :_  :_   20.0
+        sequence[1, col] = silence
+        sequence[2, col] = silence
+        sequence[3, col] = 20.0
+        col += 1
+
+        # :COINC  :_   20.0
+        sequence[1, col] = :COINC
+        sequence[2, col] = silence
+        sequence[3, col] = 20.0
+        col += 1
+
+        # :_  :_   20.0
+        sequence[1, col] = silence
+        sequence[2, col] = silence
+        sequence[3, col] = 20.0
+        col += 1
+
+        # :GAP  :_   20.0
+        sequence[1, col] = :GAP
+        sequence[2, col] = silence
+        sequence[3, col] = 20.0
+        col += 1
+    end
+
+    # Final silence
+    sequence[1, col] = silence
+    sequence[2, col] = silence
+    sequence[3, col] = end_silence
+
+    # Fill the rest of the lines/types as needed (optional)
+    sequence[4, :] .= :mid
+    sequence[5,:] .= [0ms, cumsum(sequence[3,2:end])...] .+ init_time
+    sequence[6,:] .= [cumsum(sequence[3,1:end])...] .+ init_time
+
+    line_id = (words=1, phonemes=2, duration=3, type=4, onset=5, offset=6)
+    return (;lexicon..., sequence=sequence, line_id=line_id)
+end
+
 
 """
     sign_intervals(sign::Symbol, sequence)
@@ -185,7 +270,7 @@ Given a sign symbol and a sequence, this function identifies the line of the seq
 
 # Example
 """
-function sign_intervals(sign::Symbol, sequence)
+function sign_intervals(sign::Symbol, sequence; all_simulation::Bool=false)
     @unpack dict, sequence, symbols, line_id = sequence
     ## Identify the line of the sequence that contains the sign
     sign_line_id = -1
@@ -201,37 +286,77 @@ function sign_intervals(sign::Symbol, sequence)
 
     ## Find the intervals where the sign is present
     intervals = Vector{Vector{Float32}}()
-    # cum_duration = cumsum(sequence[line_id.duration,:])
-    # _end = 1
-    # interval = [-1, -1]
+    cum_duration = cumsum(sequence[line_id.duration,:])
+    _end = 1
+    interval = [-1, -1]
     my_seq = sequence[sign_line_id, :]
-    time_counter = 0
-    for i in eachindex(my_seq)
-        interval_start = time_counter
-        if my_seq[i] == sign
-            interval_end = time_counter + sequence[line_id.duration, i]
+    while !isnothing(_end)  || !isnothing(_start)
+        _start = findfirst(x -> x == sign, my_seq[_end:end])
+        if isnothing(_start)
+            break
         else
-            interval_end = time_counter
+            _start += _end-1
         end
-        if  interval_end > interval_start
-            interval = [interval_start, interval_end]
-            push!(intervals, interval)
+        _end  = findfirst(x -> x != sign, my_seq[_start:end]) + _start - 1
+        interval[1] = cum_duration[_start] - sequence[line_id.duration,_start] 
+        interval[2] = cum_duration[_end-1]
+        if all_simulation
+            interval[1] +=  sequence[line_id.onset, 1]
+            interval[2] +=  sequence[line_id.onset, 1]
         end
-        time_counter += sequence[line_id.duration, i]
+        push!(intervals, interval)
     end
-    # while !isnothing(_end)  || !isnothing(_start)
-    #     _start = findfirst(x -> x == sign, my_seq[_end:end])
-    #     if isnothing(_start)
-    #         break
-    #     else
-    #         _start += _end-1
-    #     end
-    #     _end  = findfirst(x -> x != sign, my_seq[_start:end]) + _start - 1
-    #     interval[1] = cum_duration[_start] - sequence[line_id.duration,_start]
-    #     interval[2] = cum_duration[_end-1]
-    # end
-    return intervals
+    return intervals 
 end
+# function sign_intervals(sign::Symbol, sequence; all_simulation::Bool=false)
+#     @unpack dict, sequence, symbols, line_id = sequence
+#     ## Identify the line of the sequence that contains the sign (either words or phonemes)
+#     sign_line_id = -1
+#     for k in keys(symbols)
+#         if sign in getfield(symbols,k)
+#             sign_line_id = getfield(line_id,k)
+#             break
+#         end
+#     end
+#     if sign_line_id == -1
+#         throw(ErrorException("Sign index not found"))
+#     end
+
+#     ## Find the intervals where the sign is present
+#     intervals = Vector{Vector{Float32}}()
+#     my_seq = sequence[sign_line_id, :]
+#     if all_simulation
+#         time_counter = sequence[5, 1]
+#     else
+#         time_counter = 0
+#     end
+    
+#     for i in eachindex(my_seq)
+#         interval_start = time_counter
+#         if my_seq[i] == sign
+#             interval_end = time_counter + sequence[line_id.duration, i]
+#         else
+#             interval_end = time_counter
+#         end
+#         if  interval_end > interval_start
+#             interval = [interval_start, interval_end]
+#             push!(intervals, interval)
+#         end
+#         time_counter += sequence[line_id.duration, i]
+#     end
+#     # while !isnothing(_end)  || !isnothing(_start)
+#     #     _start = findfirst(x -> x == sign, my_seq[_end:end])
+#     #     if isnothing(_start)
+#     #         break
+#     #     else
+#     #         _start += _end-1
+#     #     end
+#     #     _end  = findfirst(x -> x != sign, my_seq[_start:end]) + _start - 1
+#     #     interval[1] = cum_duration[_start] - sequence[line_id.duration,_start]
+#     #     interval[2] = cum_duration[_end-1]
+#     # end
+#     return intervals
+# end
 
 
 function all_intervals(sym::Symbol, sequence; interval::Vector=[-50ms, 100ms] )
@@ -240,7 +365,7 @@ function all_intervals(sym::Symbol, sequence; interval::Vector=[-50ms, 100ms] )
     symbols = getfield(sequence.symbols, sym)
     @show symbols
     for word in symbols
-        for myinterval in sign_intervals(word, sequence)
+        for myinterval in sign_intervals(word, sequence; all_simulation=true)
             offset = myinterval[end] .+ interval
             push!(offsets, offset)
             push!(ys, word)
@@ -372,15 +497,7 @@ A dictionary mapping each phoneme to the specified `duration`.
 """
 function getduration(dictionary::Dict{Symbol, Vector{Symbol}}, duration::R) where R <: Real
     phonemes = getphonemes(dictionary)
-    durations = Dict{Symbol,Any}()
-    for phoneme in phonemes
-        if phoneme == Symbol("_")
-            push!(durations, Symbol(phoneme) => Float32(200ms))
-        else
-            push!(durations, Symbol(phoneme) => Float32(duration))
-        end
-    end
-    return durations
+    Dict(Symbol(phoneme) => Float32(duration) for phoneme in phonemes)
 end
 
 function getduration_vot(dictionary::Dict{Symbol, Any}, duration::R, vot_durations) where R <: Real
@@ -412,7 +529,7 @@ function symbolnames(seq)
     phonemes = String[]
     words = String[]
     [push!(phonemes, string.(ph)) for ph in seq.symbols.phonemes]
-    [push!(words, string(w)) for w in seq.symbols.words] # CHANGED: removed w_
+    [push!(words, "w_"*string(w)) for w in seq.symbols.words]
     return (phonemes=phonemes, words=words)
 end
 
@@ -434,4 +551,4 @@ end
 
 export getstim, getstimsym
 
-export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getduration, getphonemes, symbolnames, getneurons, all_intervals
+export generate_sequence, generate_sequence_vot, generate_serial_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, generate_lexicon_vot, start_interval, getdictionary, getdictionary_vot, getduration, getduration_vot, getphonemes, getphonemes_vot, symbolnames, getneurons, all_intervals
