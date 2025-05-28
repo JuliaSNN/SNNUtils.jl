@@ -7,6 +7,7 @@ function get_model(L, NAR, Nd; Vs=-55)
     E = Multipod(
         ls;
         N=1,
+        NMDA = EyalNMDA,
         param= adex,
         postspike = ps
     )
