@@ -27,11 +27,20 @@ function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
     @assert length(y) == size(Xs, 2)
     if p <1 
         train, test = partition(eachindex(y), p, rng=seed, stratify=y)
-        ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
-        Xtrain = StatsBase.transform(ZScore, X[:,train])
-        Xtest = StatsBase.transform(ZScore, X[:,test])
-        ytrain = y[train]
-        ytest = y[test]
+        # n = 1
+        if length(train)<2 || length(test)<2
+            @error "Not enough samples in train or test set"
+            Xtrain = X
+            Xtest = X
+            ytrain = y
+            ytest = y
+        else
+            ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
+            Xtrain = StatsBase.transform(ZScore, X[:,train])
+            Xtest = StatsBase.transform(ZScore, X[:,test])
+            ytrain = y[train]
+            ytest = y[test]
+        end
     else
         Xtrain = X
         Xtest = X
@@ -259,13 +268,14 @@ function MultinomialLogisticRegression(
 end
 
 function symbols_to_int(symbols)
-    v = unique(symbols)
+    v = unique(symbols) |> collect |> sort
     n = length(v)
+    mapping = Dict{Symbol, Int}(v[i] => i for i in 1:n)
     symbols_int = zeros(Int, length(symbols))
     for i in eachindex(symbols)
-        symbols_int[i] = findfirst(==(symbols[i]), v)
+        symbols_int[i] = mapping[symbols[i]]
     end
-    return symbols_int
+    return symbols_int, mapping
 end
 
 function standardize(data::Matrix, dim=1)
