@@ -25,7 +25,7 @@ function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
-    if p <1 
+    if p < 1 
         train, test = partition(eachindex(y), p, rng=seed, stratify=y)
         ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
         Xtrain = StatsBase.transform(ZScore, X[:,train])

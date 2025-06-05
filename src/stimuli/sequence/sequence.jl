@@ -116,6 +116,69 @@ function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1,
 
 end
 
+function generate_sequence_vot_train(seq_function::Function; lexicon::NamedTuple, init_silence::Real, end_silence::Real, seed=-1, init_time = 0ms, kwargs...)
+    (seed > 0) && (Random.seed!(seed))
+
+    words, phonemes, seq_length = seq_function(;
+                        lexicon=lexicon,
+                        kwargs...
+                    )
+
+    @unpack dict, symbols, silence, ph_duration = lexicon
+    ## create the populations
+    ## sequence from the initial word sequence
+    sequence = Matrix{Any}(fill(silence, 6, seq_length+2))
+    sequence[1, 1] = silence
+    sequence[2, 1] = silence
+    sequence[3, 1] = init_silence
+    for (n, (w, p)) in enumerate(zip(words, phonemes))
+        if startswith(String(p), "#")
+            sequence[1, 1+n] = silence
+            sequence[2, 1+n] = p
+            min, max = ph_duration[p]
+            vot_duration = rand(range(min, max; step=10))
+            sequence[3, 1+n] = Float32(vot_duration)
+        elseif sequence[2, n]  == silence
+            sequence[1, 1+n] = silence
+            sequence[2, 1+n] = p
+            sequence[3, 1+n] = ph_duration[p]
+        else
+            sequence[1, 1+n] = w
+            sequence[2, 1+n] = p
+            sequence[3, 1+n] = ph_duration[p]
+        end
+    end
+
+    sequence[1, end] = silence
+    sequence[2, end] = silence
+    sequence[3, end] = end_silence
+
+    sequence[4, :] .= :mid
+    for n in 1:(size(sequence, 2)-2)
+        if !(sequence[1, n+1] == sequence[1, n])
+            sequence[4, n+1] = :onset
+        end
+        if !(sequence[1, n+1] == sequence[1, n+2])
+            sequence[4, n+1] = :offset
+            j = 2
+            while (n+1-j > 0) && !(sequence[4, n+1-j] == :onset)
+                sequence[4, n+1-j] = Symbol("offset$j")
+                j += 1
+            end
+        end
+        (sequence[1, n] == :_) && (sequence[4, n] = :silence)
+    end
+
+    sequence[5,:] .= [0ms, cumsum(sequence[3,2:end])...] .+ init_time
+    sequence[6,:] .= [cumsum(sequence[3,1:end])...] .+ init_time
+
+    line_id = (words=1, phonemes=2, duration=3, type=4, onset=5, offset=6)
+    sequence = (;lexicon...,
+                sequence=sequence,
+                line_id = line_id)
+
+end
+
 function generate_sequence_vot(seq_function::Function; lexicon::NamedTuple, init_silence::Real, end_silence::Real, seed=-1, init_time = 0ms, kwargs...)
     (seed > 0) && (Random.seed!(seed))
 
@@ -204,10 +267,10 @@ function generate_serial_sequence(repetition::Int, lexicon::NamedTuple, init_sil
         sequence[3, col] = 20.0
         col += 1
 
-        # :_  :_   20.0
+        # :_  :_   50.0
         sequence[1, col] = silence
         sequence[2, col] = silence
-        sequence[3, col] = 20.0
+        sequence[3, col] = 50.0
         col += 1
 
         # :_  :V   20.0
@@ -216,10 +279,10 @@ function generate_serial_sequence(repetition::Int, lexicon::NamedTuple, init_sil
         sequence[3, col] = 20.0
         col += 1
 
-        # :_  :_   20.0
+        # :_  :_   50.0
         sequence[1, col] = silence
         sequence[2, col] = silence
-        sequence[3, col] = 20.0
+        sequence[3, col] = 50.0
         col += 1
 
         # :COINC  :_   20.0
@@ -228,10 +291,10 @@ function generate_serial_sequence(repetition::Int, lexicon::NamedTuple, init_sil
         sequence[3, col] = 20.0
         col += 1
 
-        # :_  :_   20.0
+        # :_  :_   50.0
         sequence[1, col] = silence
         sequence[2, col] = silence
-        sequence[3, col] = 20.0
+        sequence[3, col] = 50.0
         col += 1
 
         # :GAP  :_   20.0
@@ -239,6 +302,12 @@ function generate_serial_sequence(repetition::Int, lexicon::NamedTuple, init_sil
         sequence[2, col] = silence
         sequence[3, col] = 20.0
         col += 1
+
+        # # :_  :_   50.0
+        # sequence[1, col] = silence
+        # sequence[2, col] = silence
+        # sequence[3, col] = 50.0
+        # col += 1
     end
 
     # Final silence
@@ -551,4 +620,4 @@ end
 
 export getstim, getstimsym
 
-export generate_sequence, generate_sequence_vot, generate_serial_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, generate_lexicon_vot, start_interval, getdictionary, getdictionary_vot, getduration, getduration_vot, getphonemes, getphonemes_vot, symbolnames, getneurons, all_intervals
+export generate_sequence, generate_sequence_vot, generate_sequence_vot_train, generate_serial_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, generate_lexicon_vot, start_interval, getdictionary, getdictionary_vot, getduration, getduration_vot, getphonemes, getphonemes_vot, symbolnames, getneurons, all_intervals
