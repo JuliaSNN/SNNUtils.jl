@@ -83,7 +83,7 @@ function step_input(;
     return (stim |> dict2ntuple)
 end
 
-function set_stimuli!(;model, targets::Vector{}, seq, words=true, phonemes=true)
+function set_stimuli!(;model, targets::Vector{}, seq, words=true, phonemes=true, selected=nothing)
     @unpack stim = model
     for target in targets
         for s in seq.symbols.words
@@ -97,12 +97,30 @@ function set_stimuli!(;model, targets::Vector{}, seq, words=true, phonemes=true)
         end
         for s in seq.symbols.phonemes
             if !startswith(String(s), "#")
-                if isnothing(target)
-                    stim[s].param.active[1] = phonemes
+                if isnothing(selected)
+                    if isnothing(target)
+                        stim[s].param.active[1] = phonemes
+                    else
+                        ph = Symbol(string(s,"_",target))
+                        stim[ph].param.active[1] = phonemes
+                    end 
                 else
-                    ph = Symbol(string(s,"_",target))
-                    stim[ph].param.active[1] = phonemes
-                end 
+                    if selected == s
+                        if isnothing(target)
+                            stim[s].param.active[1] = phonemes
+                        else
+                            ph = Symbol(string(s,"_",target))
+                            stim[ph].param.active[1] = phonemes
+                        end 
+                    else
+                        if isnothing(target)
+                            stim[s].param.active[1] = false
+                        else
+                            ph = Symbol(string(s,"_",target))
+                            stim[ph].param.active[1] = false
+                        end 
+                    end
+                end
             end
         end
     end
