@@ -323,4 +323,22 @@ end
 
 export getstim, getstimsym
 
-export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getduration, getphonemes, symbolnames, getneurons, all_intervals
+export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getduration, getphonemes, symbolnames, getneurons, all_intervals, generate_balanced_sequence
+
+
+function generate_balanced_sequence(sounds, sequence_length)
+    num_sounds = length(sounds)
+    target_count = sequence_length ÷ num_sounds
+    remainder = sequence_length % num_sounds
+
+    # Create a list with the target count of each sound
+    sequence = repeat(sounds, inner=target_count)
+
+    # Add the remainder sounds to balance the sequence
+    sequence = vcat(sequence, sounds[1:remainder])
+
+    # Shuffle the sequence to randomize the order
+    shuffled_sequence = shuffle(sequence)
+
+    return shuffled_sequence
+end
