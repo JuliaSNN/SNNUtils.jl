@@ -25,7 +25,7 @@ end
 
 function nmda_curr(V) 
     @unpack mg, b, k = SNN.EyalNMDA
-    return (1.0f0 + (mg / b) * SNN.exp32(k * Float32(V)))^-1
+    return (1.0f0 + (mg / b) * SNN.exp(k * Float32(V)))^-1
 end
 
 function residual_current(;λ=λ, kIE=kIE, L=L, NAR=NAR, Nd=Nd, currents=false, Vs=-55mV)
