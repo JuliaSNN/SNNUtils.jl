@@ -1,6 +1,6 @@
 module SNNUtils
 
-using SNNBase
+using SNNModels
 @load_units
 using DrWatson
 using Parameters

@@ -5,7 +5,7 @@ using StatsBase
 using MultivariateStats
 using LinearAlgebra
 using StatisticalMeasures
-import SNNBase: AbstractPopulation
+import SNNModels: AbstractPopulation
     
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
