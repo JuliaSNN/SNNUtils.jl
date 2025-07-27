@@ -23,7 +23,7 @@ dendritic_stp_network = let
         param= AdExSoma(
             C = 281pF,  # membrane capacitance
             gl = 40nS,  # leak conductance
-            R = nS / 40nS * SNN.GΩ,  # membrane resistance
+            R = nS / 40nS * GΩ,  # membrane resistance
             τm = 281pF / 40nS,  # membrane time constant
             Er = -70.6mV,  # reset potential
             Vr = -55.6mV,  # resting potential
@@ -40,7 +40,7 @@ dendritic_stp_network = let
         dend_syn = Synapse(EyalGluDend, MilesGabaDend), # defines glutamaterbic and gabaergic receptors in the dendrites
         soma_syn=  Synapse(DuarteGluSoma, MilesGabaSoma)  # connect EyalGluDend to MilesGabaDend
     )
-    PV = SNN.IFParameterGsyn(
+    PV = IFParameterGsyn(
         τm = 104.52pF / 9.75nS,
         El = -64.33mV,
         Vt = -38.97mV,
@@ -54,7 +54,7 @@ dendritic_stp_network = let
         gsyn_i = 0.84nS, 
     )
 
-    SST = SNN.IFParameterGsyn(
+    SST = IFParameterGsyn(
         τm = 102.86pF / 4.61nS,
         El = -61mV,
         Vt = -34.4mV,
@@ -71,9 +71,9 @@ dendritic_stp_network = let
         τw = 144ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     )
     plasticity = (
-        iSTDP_rate = SNN.iSTDPRate(η = 0.2, τy = 10ms, r=10Hz, Wmax = 200.0pF, Wmin = 2.78pF),
-        iSTDP_potential =SNN.iSTDPPotential(η = 0.2, v0 = -70mV, τy = 20ms, Wmax = 200.0pF, Wmin = 2.78pF),
-        vstdp = SNN.vSTDPParameter(
+        iSTDP_rate = iSTDPRate(η = 0.2, τy = 10ms, r=10Hz, Wmax = 200.0pF, Wmin = 2.78pF),
+        iSTDP_potential =iSTDPPotential(η = 0.2, v0 = -70mV, τy = 20ms, Wmax = 200.0pF, Wmin = 2.78pF),
+        vstdp = vSTDPParameter(
                 A_LTD = 4.0f-4,  #ltd strength
                 A_LTP = 14.0f-4, #ltp strength
                 θ_LTD = -40.0,  #ltd voltage threshold # set higher
@@ -84,7 +84,7 @@ dendritic_stp_network = let
                 Wmin = 2.78,  #minimum ee strength
                 Wmax = 81.4,   #maximum ee strength
             ),
-        stm=SNN.STPParameter()
+        stm=STPParameter()
 
     )
     connectivity = (

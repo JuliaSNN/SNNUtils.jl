@@ -5,6 +5,7 @@ using StatsBase
 using MultivariateStats
 using LinearAlgebra
 using StatisticalMeasures
+import SNNBase: AbstractPopulation
     
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
@@ -110,7 +111,7 @@ export trial_average
     Matrix::Float32: The spike count matrix (n_features x n_samples).
     
 """
-function spikecount_features(pop::T, offsets::Vector)  where T <: SNN.AbstractPopulation
+function spikecount_features(pop::T, offsets::Vector)  where T <: AbstractPopulation
     N = pop.N
     X = zeros(N, length(offsets))
     Threads.@threads for i in eachindex(offsets)
@@ -135,10 +136,10 @@ end
     # Returns
     Matrix::Float32: The feature matrix (n_features x n_samples).
 """
-function sym_features(sym::Symbol, pop::T, offsets::Vector) where T <: SNN.AbstractPopulation
+function sym_features(sym::Symbol, pop::T, offsets::Vector) where T <: AbstractPopulation
     N = pop.N
     X = zeros(N, length(offsets))
-    var, r_v = SNN.interpolated_record(pop, sym)
+    var, r_v = interpolated_record(pop, sym)
     Threads.@threads for i in eachindex(offsets)
         offset = offsets[i]
         offset[end] > r_v[end] && continue

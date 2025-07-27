@@ -1,6 +1,6 @@
 # Duarte2019 model parameters without NMDA and GABA_B synapses
 duarte2019 = (
-    PV = SNN.IFParameterGsyn(
+    PV = IFParameterGsyn(
         τm = 104.52pF / 9.75nS,
         El = -64.33mV,
         Vt = -38.97mV,
@@ -13,7 +13,7 @@ duarte2019 = (
         gsyn_e = 1.04nS, # ADDED 
         gsyn_i = 0.84nS, # ADDED 
     ),
-    SST = SNN.IFParameterGsyn(
+    SST = IFParameterGsyn(
         τm = 102.86pF / 4.61nS,
         El = -61mV,
         Vt = -34.4mV,

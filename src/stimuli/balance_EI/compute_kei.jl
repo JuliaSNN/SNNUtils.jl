@@ -1,8 +1,8 @@
 
 function get_model(L, NAR, Nd; Vs=-55) 
-    ps = SNN.PostSpike(A= 10.0,τA= 30.0)
+    ps = PostSpike(A= 10.0,τA= 30.0)
     adex = AdExSoma( C=281pF, gl=40nS, Vr = -70.6, Er = -70.6, ΔT = 2, Vt = 1000.f0, a = 4, b = 80.5, τw = 144, up = 1ms, τabs= 1ms)
-    dend_syn = EyalEquivalentNAR(NAR) |> SNN.synapsearray
+    dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
     ls = repeat([L], Nd)
     E = Multipod(
         ls;
@@ -18,14 +18,14 @@ function get_model(L, NAR, Nd; Vs=-55)
     gl = E.param.gl
     a = E.param.a
     Vr = E.param.Vr
-    return SNN.@symdict gax gm gl a Vs Vr C dend_syn Nd
+    return @symdict gax gm gl a Vs Vr C dend_syn Nd
 end
 
 
 
 function nmda_curr(V) 
-    @unpack mg, b, k = SNN.EyalNMDA
-    return (1.0f0 + (mg / b) * SNN.exp(k * Float32(V)))^-1
+    @unpack mg, b, k = EyalNMDA
+    return (1.0f0 + (mg / b) * exp(k * Float32(V)))^-1
 end
 
 function residual_current(;λ=λ, kIE=kIE, L=L, NAR=NAR, Nd=Nd, currents=false, Vs=-55mV)

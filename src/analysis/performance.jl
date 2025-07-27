@@ -2,7 +2,7 @@
 #     count = 0
 #     for time_interval in intervals
 #         interval_range = range(first(time_interval), stop=last(time_interval), length=length(time_interval))
-#         firing_rates = Dict(w => mean(SNN.average_firing_rate(population; interval=interval_range, pop=neurons[w])) for w in keys(neurons))
+#         firing_rates = Dict(w => mean(average_firing_rate(population; interval=interval_range, pop=neurons[w])) for w in keys(neurons))
 
 #         if all(firing_rates[target] > firing_rates[w] for w in keys(neurons) if w != target)
 #             count += 1
@@ -11,7 +11,7 @@
 #     return count / length(intervals)
 # end
 
-function average_weight(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SNN.SpikingSynapse)
+function average_weight(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SpikingSynapse)
     @unpack W = synapse
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
@@ -29,7 +29,7 @@ function average_weight(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{I
     return mean(all_weights)
 end
 
-function weights_indices(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SNN.SpikingSynapse)
+function weights_indices(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SpikingSynapse)
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
     index = synapse.index 
@@ -46,7 +46,7 @@ function weights_indices(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{
     return indices
 end
 
-function update_weight!(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SNN.SpikingSynapse)
+function update_weight!(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SpikingSynapse)
     @unpack W = synapse
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices

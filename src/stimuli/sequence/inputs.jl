@@ -44,7 +44,7 @@ function step_input(;
         _my_targets = Dict{Symbol,Any}()
         for t in targets
             key = isnothing(t) ? :v : t 
-            my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="w_$s", p_post=p_post) 
+            my_input = PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="w_$s", p_post=p_post) 
             push!(_my_targets, key => my_input)
         end
         if length(_my_targets) > 1
@@ -60,7 +60,7 @@ function step_input(;
         _my_targets = Dict{Symbol,Any}()
         for t in targets
             key = isnothing(t) ? :v : t 
-            my_input = SNN.PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="p_$s", p_post=p_post) 
+            my_input = PoissonStimulus(E, :he, t, μ=proj_strength, param=param, name="p_$s", p_post=p_post) 
             push!(_my_targets, key => my_input)
         end
         if length(_my_targets) > 1
