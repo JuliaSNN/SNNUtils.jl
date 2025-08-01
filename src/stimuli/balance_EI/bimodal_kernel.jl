@@ -26,7 +26,7 @@ end
 #Get its maxima
 function get_maxima(data)
     arg_maxima = []
-    for x = 2:length(data)-1
+    for x = 2:(length(data)-1)
         (data[x] > data[x-1]) && (data[x] > data[x+1]) && (push!(arg_maxima, x))
     end
     @debug "Maxima: $(length(arg_maxima))"

@@ -16,13 +16,18 @@
     - average_t::Vector{R}: Vector of average weights for each time step
 
 """
-function average_weight_dynamics(pre::Vector{Int}, post::Vector{Int}, synapse::SpikingSynapse, record::Matrix{R}) where R <: Real
+function average_weight_dynamics(
+    pre::Vector{Int},
+    post::Vector{Int},
+    synapse::SpikingSynapse,
+    record::Matrix{R},
+) where {R<:Real}
     @unpack rowptr, colptr, I, J, index, W = synapse
-    average_t = zeros(size(record,2))  # Store weights for all filtered connections
+    average_t = zeros(size(record, 2))  # Store weights for all filtered connections
     for t in axes(record, 2)
         all_weights = Float32[]  # Store weights for all filtered connections
         for j in pre
-            for st = colptr[j]:(colptr[j + 1] - 1)
+            for st = colptr[j]:(colptr[j+1]-1)
                 if (I[st] in post)
                     push!(all_weights, record[st, t])
                 end

@@ -22,17 +22,24 @@ function generate_lexicon(config)
     @unpack ph_duration, dictionary = config
 
     all_words = collect(keys(dictionary)) |> Set |> collect |> sort |> Vector{Symbol}
-    all_phonemes = collect(values(dictionary)) |> Iterators.flatten |> Set |> collect |> sort |> Vector{Symbol}
-    symbols = collect(union(all_words,all_phonemes))
+    all_phonemes =
+        collect(values(dictionary)) |>
+        Iterators.flatten |>
+        Set |>
+        collect |>
+        sort |>
+        Vector{Symbol}
+    symbols = collect(union(all_words, all_phonemes))
 
     ## Add the silence symbol
     silence_symbol = :_
 
-    return (dict=dictionary, 
-            symbols=(phonemes = all_phonemes, 
-            words = all_words), 
-            ph_duration = ph_duration, 
-            silence = silence_symbol)
+    return (
+        dict = dictionary,
+        symbols = (phonemes = all_phonemes, words = all_words),
+        ph_duration = ph_duration,
+        silence = silence_symbol,
+    )
 end
 
 """
@@ -51,13 +58,15 @@ Generate a sequence of words and phonemes based on the provided lexicon and conf
 A named tuple containing the lexicon information and the generated sequence.
 
 """
-function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1, kwargs...)
+function generate_sequence(
+    seq_function::Function;
+    lexicon::NamedTuple,
+    seed = -1,
+    kwargs...,
+)
     (seed > 0) && (Random.seed!(seed))
 
-    words, phonemes, seq_length = seq_function(;
-                        lexicon=lexicon,
-                        kwargs...
-                    )
+    words, phonemes, seq_length = seq_function(; lexicon = lexicon, kwargs...)
 
     @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
@@ -73,14 +82,14 @@ function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1,
     end
 
     sequence[4, :] .= :mid
-    for n in axes(sequence, 2)[1:end-2]
+    for n in axes(sequence, 2)[1:(end-2)]
         if !(sequence[1, n+1] == sequence[1, n])
             sequence[4, 1+n] = :onset
         end
         if !(sequence[1, n+1] == sequence[1, n+2])
             sequence[4, 1+n] = :offset
             j = 2
-            while !(sequence[4, n+1 - j] == :onset)
+            while !(sequence[4, n+1-j] == :onset)
                 sequence[4, 1+n-j] = Symbol("offset$j")
                 j += 1
             end
@@ -89,13 +98,11 @@ function generate_sequence(seq_function::Function; lexicon::NamedTuple, seed=-1,
         (sequence[1, n] == :_) && (sequence[4, n] = :silence)
     end
 
-    sequence[5,:] .= [0ms,cumsum(sequence[3,2:end])...]
-    sequence[6,:] .= [cumsum(sequence[3,1:end])...]
+    sequence[5, :] .= [0ms, cumsum(sequence[3, 2:end])...]
+    sequence[6, :] .= [cumsum(sequence[3, 1:end])...]
 
-    line_id = (words=1, phonemes=2, duration=3, type=4, onset=5, offset=6)
-    sequence = (;lexicon...,
-                sequence=sequence,
-                line_id = line_id)
+    line_id = (words = 1, phonemes = 2, duration = 3, type = 4, onset = 5, offset = 6)
+    sequence = (; lexicon..., sequence = sequence, line_id = line_id)
 
 end
 
@@ -119,8 +126,8 @@ function sign_intervals(sign::Symbol, sequence)
     ## Identify the line of the sequence that contains the sign
     sign_line_id = -1
     for k in keys(symbols)
-        if sign in getfield(symbols,k)
-            sign_line_id = getfield(line_id,k)
+        if sign in getfield(symbols, k)
+            sign_line_id = getfield(line_id, k)
             break
         end
     end
@@ -142,7 +149,7 @@ function sign_intervals(sign::Symbol, sequence)
         else
             interval_end = time_counter
         end
-        if  interval_end > interval_start
+        if interval_end > interval_start
             interval = [interval_start, interval_end]
             push!(intervals, interval)
         end
@@ -163,7 +170,7 @@ function sign_intervals(sign::Symbol, sequence)
 end
 
 
-function all_intervals(sym::Symbol, sequence; interval::Vector=[-50ms, 100ms] )
+function all_intervals(sym::Symbol, sequence; interval::Vector = [-50ms, 100ms])
     offsets = Vector{Vector{Float32}}()
     ys = Vector{Symbol}()
     symbols = getfield(sequence.symbols, sym)
@@ -252,7 +259,7 @@ Create a dictionary mapping each word in `words` to a vector of symbols represen
 # Returns
 A dictionary mapping each word to a vector of symbols representing its letters.
 """
-function getdictionary(words::Vector{T }) where T <: Union{String, Symbol}
+function getdictionary(words::Vector{T}) where {T<:Union{String,Symbol}}
     Dict(Symbol(word) => [Symbol(letter) for letter in string(word)] for word in words)
 end
 
@@ -267,7 +274,7 @@ Get a vector of symbols representing all the unique phonemes in the given `dicti
 # Returns
 A vector of symbols representing all the unique phonemes in the given `dictionary`.
 """
-function getphonemes(dictionary::Dict{Symbol, Vector{Symbol}})
+function getphonemes(dictionary::Dict{Symbol,Vector{Symbol}})
     phs = collect(unique(vcat(values(dictionary)...)))
     push!(phs, :_)
     return phs
@@ -285,7 +292,7 @@ Create a dictionary mapping each phoneme in the given `dictionary` to the specif
 # Returns
 A dictionary mapping each phoneme to the specified `duration`.
 """
-function getduration(dictionary::Dict{Symbol, Vector{Symbol}}, duration::R) where R <: Real
+function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::R) where {R<:Real}
     phonemes = getphonemes(dictionary)
     Dict(Symbol(phoneme) => Float32(duration) for phoneme in phonemes)
 end
@@ -302,14 +309,14 @@ function symbolnames(seq)
     words = String[]
     [push!(phonemes, string.(ph)) for ph in seq.symbols.phonemes]
     [push!(words, "w_"*string(w)) for w in seq.symbols.words]
-    return (phonemes=phonemes, words=words)
+    return (phonemes = phonemes, words = words)
 end
 
-function getneurons(stim, symbol, target=nothing)
-    target = (target ==:s) || isnothing(target) ? "" : "_$target" 
-    target = Symbol(string(symbol, target ))
+function getneurons(stim, symbol, target = nothing)
+    target = (target == :s) || isnothing(target) ? "" : "_$target"
+    target = Symbol(string(symbol, target))
     @show target
-   return collect(Set(getfield(stim,target).neurons))
+    return collect(Set(getfield(stim, target).neurons))
 end
 
 function getstim(stim, word, target)
@@ -317,13 +324,25 @@ function getstim(stim, word, target)
 end
 
 function getstimsym(word, target)
-    target = (target ==:s) || isnothing(target) ? "" : "_$target" 
+    target = (target == :s) || isnothing(target) ? "" : "_$target"
     return Symbol(string(word)*target)
 end
 
 export getstim, getstimsym
 
-export generate_sequence, sign_intervals, time_in_interval, sequence_end, generate_lexicon, start_interval, getdictionary, getduration, getphonemes, symbolnames, getneurons, all_intervals, generate_balanced_sequence
+export generate_sequence,
+    sign_intervals,
+    time_in_interval,
+    sequence_end,
+    generate_lexicon,
+    start_interval,
+    getdictionary,
+    getduration,
+    getphonemes,
+    symbolnames,
+    getneurons,
+    all_intervals,
+    generate_balanced_sequence
 
 
 function generate_balanced_sequence(sounds, sequence_length)
@@ -332,7 +351,7 @@ function generate_balanced_sequence(sounds, sequence_length)
     remainder = sequence_length % num_sounds
 
     # Create a list with the target count of each sound
-    sequence = repeat(sounds, inner=target_count)
+    sequence = repeat(sounds, inner = target_count)
 
     # Add the remainder sounds to balance the sequence
     sequence = vcat(sequence, sounds[1:remainder])

@@ -6,7 +6,7 @@ using MultivariateStats
 using LinearAlgebra
 using StatisticalMeasures
 import SNNModels: AbstractPopulation
-    
+
 """
     SVCtrain(Xs, ys; seed=123, p=0.6)
     
@@ -21,13 +21,13 @@ import SNNModels: AbstractPopulation
 
 
 """
-function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
+function SVCtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
     X = Xs .+ 1e-2
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
-    if p <1 
-        train, test = partition(eachindex(y), p, rng=seed, stratify=y)
+    if p < 1
+        train, test = partition(eachindex(y), p, rng = seed, stratify = y)
         # n = 1
         if length(train)<2 || length(test)<2
             @error "Not enough samples in train or test set"
@@ -36,9 +36,9 @@ function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
             ytrain = y
             ytest = y
         else
-            ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:,train], dims=2)
-            Xtrain = StatsBase.transform(ZScore, X[:,train])
-            Xtest = StatsBase.transform(ZScore, X[:,test])
+            ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:, train], dims = 2)
+            Xtrain = StatsBase.transform(ZScore, X[:, train])
+            Xtest = StatsBase.transform(ZScore, X[:, test])
             ytrain = y[train]
             ytest = y[test]
         end
@@ -50,7 +50,7 @@ function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
     end
 
     @assert size(Xtrain, 2) == length(ytrain)
-    mach = svmtrain(Xtrain, ytrain, kernel=Kernel.Linear)
+    mach = svmtrain(Xtrain, ytrain, kernel = Kernel.Linear)
     ŷ, decision_values = svmpredict(mach, Xtest);
     confusion_matrix = confmat(ŷ, ytest)
     score = kappa(confusion_matrix)
@@ -62,7 +62,7 @@ function SVCtrain(Xs, ys; seed=123, p=0.5, labels=false)
     # end
 end
 
-function trial_average(array::Array, sequence::Vector, dim::Int=-1)
+function trial_average(array::Array, sequence::Vector, dim::Int = -1)
     trial_dim = dim < 0 ? ndims(array) : dim
     my_dims = collect(size(array))
     popat!(my_dims, trial_dim)
@@ -73,30 +73,31 @@ function trial_average(array::Array, sequence::Vector, dim::Int=-1)
     for i in eachindex(labels)
         sound = labels[i]
         sound_ids = findall(==(sound), sequence)
-        selectdim(spatial_code, ave_dim, i) .= mean(selectdim(array, trial_dim, sound_ids), dims=ave_dim)
+        selectdim(spatial_code, ave_dim, i) .=
+            mean(selectdim(array, trial_dim, sound_ids), dims = ave_dim)
     end
     return spatial_code, labels
 end
 
 export trial_average
 
-    # try
-            # machine_loaded = false
-            # mach = nothing
-    #     # SVMClassifier = MLJ.@load SVC pkg=LIBSVM verbosity=0
-    #     # svm = LIBSVM.SVC() # Use the scikit-like interface
-    #     # svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
-    #     # MLJ.fit!(mach, verbosity=0)
-    #     # mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) 
-    # catch
-    #     @warn "SVC not loaded -  wait 5s"
-    #     sleep(5)
-    #     return
-    # end
+# try
+# machine_loaded = false
+# mach = nothing
+#     # SVMClassifier = MLJ.@load SVC pkg=LIBSVM verbosity=0
+#     # svm = LIBSVM.SVC() # Use the scikit-like interface
+#     # svm = SVMClassifier(kernel=LIBSVM.Kernel.Linear)
+#     # MLJ.fit!(mach, verbosity=0)
+#     # mach = machine(svm, Xtrain', ytrain, scitype_check_level=0) 
+# catch
+#     @warn "SVC not loaded -  wait 5s"
+#     sleep(5)
+#     return
+# end
 
-    # ŷ, classes = svmpredict(classifier, Xtest);
-    
-    # @info "Accuracy: $(mean(ŷ .== ytest) * 100)"
+# ŷ, classes = svmpredict(classifier, Xtest);
+
+# @info "Accuracy: $(mean(ŷ .== ytest) * 100)"
 
 """
     spikecount_features(pop::T, offsets::Vector)  where T <: AbstractPopulation
@@ -111,12 +112,12 @@ export trial_average
     Matrix::Float32: The spike count matrix (n_features x n_samples).
     
 """
-function spikecount_features(pop::T, offsets::Vector)  where T <: AbstractPopulation
+function spikecount_features(pop::T, offsets::Vector) where {T<:AbstractPopulation}
     N = pop.N
     X = zeros(N, length(offsets))
     Threads.@threads for i in eachindex(offsets)
         offset = offsets[i]
-        X[:,i] = length.(spiketimes(pop, interval = offset))
+        X[:, i] = length.(spiketimes(pop, interval = offset))
     end
     return X
 end
@@ -136,7 +137,7 @@ end
     # Returns
     Matrix::Float32: The feature matrix (n_features x n_samples).
 """
-function sym_features(sym::Symbol, pop::T, offsets::Vector) where T <: AbstractPopulation
+function sym_features(sym::Symbol, pop::T, offsets::Vector) where {T<:AbstractPopulation}
     N = pop.N
     X = zeros(N, length(offsets))
     var, r_v = interpolated_record(pop, sym)
@@ -144,7 +145,7 @@ function sym_features(sym::Symbol, pop::T, offsets::Vector) where T <: AbstractP
         offset = offsets[i]
         offset[end] > r_v[end] && continue
         range = offset[1]:1ms:offset[2]
-        X[:,i] = mean(var[:, range], dims=2)[:,1]
+        X[:, i] = mean(var[:, range], dims = 2)[:, 1]
     end
     return X
 end
@@ -170,42 +171,53 @@ The function computes the activity of the spiking neural network model for each 
 - `score`: The score of the model, which is the difference between the activity of the most active population and a random score.
 - `confusion_matrix`: The confusion matrix, normalized by the number of occurrences of each symbol in the sequence. The matrix has (predicted x true) dimensions.
 """
-function score_spikes(model, seq, target_interval=:offset, delay=nothing, pop=:E)
+function score_spikes(model, seq, target_interval = :offset, delay = nothing, pop = :E)
     ## Get word intervals 
-    offsets_ids = findall(seq.sequence[seq.line_id.type,:].==target_interval)
+    offsets_ids = findall(seq.sequence[seq.line_id.type, :] .== target_interval)
     words = seq.sequence[seq.line_id.words, offsets_ids]
     offset_times = seq.sequence[seq.line_id.offset, offsets_ids]
 
-    if isempty(offsets_ids) 
+    if isempty(offsets_ids)
         throw("No target intervals found in sequence")
     end
     ## Get word assemblies
-    labels, neurons = subpopulations(filter(x->!occursin("noise",x.name), model.stim))
-    word_assemblies = Dict(Symbol(labels[n][3:end])=> neurons[n] for n in eachindex(labels) if startswith(labels[n], "w_")) |> dict2ntuple
+    labels, neurons = subpopulations(filter(x->!occursin("noise", x.name), model.stim))
+    word_assemblies =
+        Dict(
+            Symbol(labels[n][3:end]) => neurons[n] for
+            n in eachindex(labels) if startswith(labels[n], "w_")
+        ) |> dict2ntuple
     word_list = keys(word_assemblies) |> collect |> sort
     word_count = [count(x->x==word, words) for word in word_list]
     assemblies = [word_assemblies[word] for word in word_list]
 
     my_lock = Threads.SpinLock()
     confusion_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
-    activity_matrix  = zeros(Float32, length(word_assemblies), length(word_assemblies))
+    activity_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
     _spikes = spiketimes(model.pop[pop])
-    spike_count, r = bin_spiketimes(_spikes, interval=0:10ms:offset_times[end]+100ms)
+    spike_count, r = bin_spiketimes(_spikes, interval = 0:10ms:(offset_times[end]+100ms))
 
     function _score(delay, test_interval = 0:100)
         predicted = Symbol[]
         target = Symbol[]
         @inbounds @fastmath for i in eachindex(offsets_ids)
-            target_word = findfirst(word_list.==words[i])
-            target_interval= offset_times[i] .+ test_interval .+ delay
-            r_idx = findall(x->(r[x]>target_interval[1] && r[x]<target_interval[end]), eachindex(r))
-            _spikes = sum(spike_count[:, r_idx], dims=2)[:,1]
+            target_word = findfirst(word_list .== words[i])
+            target_interval = offset_times[i] .+ test_interval .+ delay
+            r_idx = findall(
+                x->(r[x]>target_interval[1] && r[x]<target_interval[end]),
+                eachindex(r),
+            )
+            _spikes = sum(spike_count[:, r_idx], dims = 2)[:, 1]
 
             lock(my_lock)
             for word in eachindex(word_list)
-                activity_matrix[word, target_word] += mean(_spikes[assemblies[word]]) / word_count[target_word]
+                activity_matrix[word, target_word] +=
+                    mean(_spikes[assemblies[word]]) / word_count[target_word]
             end
-            push!(predicted, word_list[argmax(mean.([_spikes[assembly] for assembly in assemblies]))])
+            push!(
+                predicted,
+                word_list[argmax(mean.([_spikes[assembly] for assembly in assemblies]))],
+            )
             push!(target, word_list[target_word])
             unlock(my_lock)
         end
@@ -214,10 +226,10 @@ function score_spikes(model, seq, target_interval=:offset, delay=nothing, pop=:E
         return score, confusion_matrix, activity_matrix
     end
 
-    if !isnothing(delay) 
+    if !isnothing(delay)
         return _score(delay)
     else
-        delays= -100:10:100
+        delays = -100:10:100
         scores = Vector{Float32}(undef, length(delays))
         cms = Vector{Any}(undef, length(delays))
         for i in eachindex(delays)
@@ -227,7 +239,7 @@ function score_spikes(model, seq, target_interval=:offset, delay=nothing, pop=:E
         end
         best_score = argmax(scores)
         best_delay = delays[best_score]
-        return scores, best_delay, (;cms, delays)
+        return scores, best_delay, (; cms, delays)
     end
 end
 
@@ -271,7 +283,7 @@ end
 function symbols_to_int(symbols)
     v = unique(symbols) |> collect |> sort
     n = length(v)
-    mapping = Dict{Symbol, Int}(v[i] => i for i in 1:n)
+    mapping = Dict{Symbol,Int}(v[i] => i for i = 1:n)
     symbols_int = zeros(Int, length(symbols))
     for i in eachindex(symbols)
         symbols_int[i] = mapping[symbols[i]]
@@ -279,14 +291,14 @@ function symbols_to_int(symbols)
     return symbols_int, mapping
 end
 
-function standardize(data::Matrix, dim=1)
-    dt = StatsBase.fit(StatsBase.ZScoreTransform, data, dims=dim)
+function standardize(data::Matrix, dim = 1)
+    dt = StatsBase.fit(StatsBase.ZScoreTransform, data, dims = dim)
     return StatsBase.transform(dt, data)
 end
 
 # Function to perform PCA and return the PCA matrix and principal components
 function do_pca(data::Matrix)
-    data = standardize(data, )
+    data = standardize(data)
     pca_result = fit(PCA, data;)
     return pca_result
 end

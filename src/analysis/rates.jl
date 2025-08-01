@@ -142,10 +142,7 @@ function target_pop_rate(
         throw("symbol: 1 words, 2 phonemes")
     end
     target_interval =
-        (1+round(Int, stim.duration / dt*(interval-1))):round(
-            Int,
-            stim.duration / dt*interval,
-        )
+        (1+round(Int, stim.duration/dt*(interval-1))):round(Int, stim.duration/dt*interval)
     println(target_interval)
     words = Set(seq.sequence[symbol, :])
     target_word = seq.sequence[symbol, interval]

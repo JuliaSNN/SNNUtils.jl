@@ -28,16 +28,17 @@ duarte2019 = (
         b = 80.5pA,       #(pA) 'sra' current increment
         τw = 144ms,        #(s) adaptation time constant (~Ca-activated K current inactivation)
     ),
-    AdEx = AdExParameterGsyn(El = -76.43, 
-                            τm = 116.5pF/ 4.64nS, 
-                        Vt = -44.45, 
-                        τabs = 2.05ms,
-                        τre = 0.25ms,
-                        τde = 2.0ms,
-                        τri = 0.5ms, 
-                        τdi = 6.0ms,
-                        gsyn_e = 0.73,
-                        gsyn_i = 0.265
-                        )
+    AdEx = AdExParameterGsyn(
+        El = -76.43,
+        τm = 116.5pF/4.64nS,
+        Vt = -44.45,
+        τabs = 2.05ms,
+        τre = 0.25ms,
+        τde = 2.0ms,
+        τri = 0.5ms,
+        τdi = 6.0ms,
+        gsyn_e = 0.73,
+        gsyn_i = 0.265,
+    ),
 )
 export duarte2019

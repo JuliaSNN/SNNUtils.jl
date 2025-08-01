@@ -22,17 +22,19 @@ function word_phonemes_sequence(;
     seed = nothing,
     silent_intervals = 1,
     repetitions::Int,
-    kwargs...
+    kwargs...,
 )
 
     @unpack dict, symbols, silence, ph_duration = lexicon
     if seed !== nothing
         Random.seed!(seed)
-    end 
+    end
 
 
     dict_words = collect(keys(dict))
-    weights = isnothing(weights) ? fill(1, length(dict_words)) : [weights[word] for word in dict_words]
+    weights =
+        isnothing(weights) ? fill(1, length(dict_words)) :
+        [weights[word] for word in dict_words]
     weights = StatsBase.Weights(weights)
     word_frequency = Dict{Symbol,Int}()
     words, phonemes = [], []
@@ -40,9 +42,15 @@ function word_phonemes_sequence(;
     remaining_words = copy(dict_words)
     make_equal = true
 
-    seq_length = round(Int, length(dict_words)*repetitions* mean([length(dict[word])+ silent_intervals for word in dict_words]))
+    seq_length = round(
+        Int,
+        length(dict_words) *
+        repetitions *
+        mean([length(dict[word]) + silent_intervals for word in dict_words]),
+    )
     while length(words) < seq_length
-        current_word = choose_word(make_equal, remaining_words, dict_words, weights, word_frequency)
+        current_word =
+            choose_word(make_equal, remaining_words, dict_words, weights, word_frequency)
         word_phonemes = dict[current_word]
 
         if haskey(word_frequency, current_word)
@@ -51,10 +59,22 @@ function word_phonemes_sequence(;
             word_frequency[current_word] = 1
         end
 
-        if should_fill_with_silence(word_phonemes, silent_intervals, seq_length, length(words))
+        if should_fill_with_silence(
+            word_phonemes,
+            silent_intervals,
+            seq_length,
+            length(words),
+        )
             fill_with_silence!(words, phonemes, silence, seq_length - length(words))
         else
-            append_word_and_phonemes!(words, phonemes, current_word, word_phonemes, silence, silent_intervals)
+            append_word_and_phonemes!(
+                words,
+                phonemes,
+                current_word,
+                word_phonemes,
+                silence,
+                silent_intervals,
+            )
         end
     end
     @assert length(words) == seq_length
@@ -83,7 +103,10 @@ Returns:
 function choose_word(make_equal, remaining_words, dict_words, weights, word_frequency)
     if make_equal
         return !isempty(remaining_words) ? pop!(remaining_words) :
-               StatsBase.sample(dict_words, StatsBase.Weights([exp(-word_frequency[word]) for word in dict_words]))
+               StatsBase.sample(
+            dict_words,
+            StatsBase.Weights([exp(-word_frequency[word]) for word in dict_words]),
+        )
     else
         return StatsBase.sample(dict_words, weights)
     end
@@ -103,7 +126,12 @@ Arguments:
 Returns:
 - A boolean indicating whether the remaining sequence should be filled with silence.
 """
-function should_fill_with_silence(word_phonemes, silent_intervals, sequence_length, current_length)
+function should_fill_with_silence(
+    word_phonemes,
+    silent_intervals,
+    sequence_length,
+    current_length,
+)
     return length(word_phonemes) + silent_intervals > sequence_length - current_length
 end
 
@@ -119,7 +147,7 @@ Arguments:
 - `fill_count`: The number of times to fill with silence.
 """
 function fill_with_silence!(words, phonemes, silence_symbol, fill_count)
-    for _ in 1:fill_count
+    for _ = 1:fill_count
         push!(words, silence_symbol)
         push!(phonemes, silence_symbol)
     end
@@ -138,7 +166,14 @@ Arguments:
 - `silence_symbol`: The symbol representing silence.
 - `silent_intervals`: The number of silent intervals to append after the word.
 """
-function append_word_and_phonemes!(words, phonemes, word, phonemes_list, silence_symbol, silent_intervals)
+function append_word_and_phonemes!(
+    words,
+    phonemes,
+    word,
+    phonemes_list,
+    silence_symbol,
+    silent_intervals,
+)
     for ph in phonemes_list
         push!(phonemes, ph)
         push!(words, word)

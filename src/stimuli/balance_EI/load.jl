@@ -3,7 +3,7 @@ using JLD2, DrWatson, Interpolations
 # file = joinpath(@__DIR__,"optimal_kies_rate_50.jld")
 # fid = read(h5open(file,"r"))
 
-tripod_balance = let 
+tripod_balance = let
     μmem = -55.0 ## target membrane value
     name = "_highres"
     name = ""
@@ -29,7 +29,7 @@ tripod_balance = let
     opt_kies_soma = fid_soma.opt_kies
 
     # soma_syn_models =
-        # (ampa_eq = ampa_equivalent, nmda = nmda_soma, kuhn = ampa_kuhn, ampa = human_synapses)
+    # (ampa_eq = ampa_equivalent, nmda = nmda_soma, kuhn = ampa_kuhn, ampa = human_synapses)
 
     balance_kie_soma = (
         ampa_eq = opt_kies_soma.AMPA_EQ,
@@ -51,12 +51,19 @@ tripod_balance = let
 
     balance_path = @__DIR__
     @unpack νs, models, min_AMPA, min_NMDA = fid
-    dend = (kie=balance_kie_rate, gsyn=balance_kie_gsyn, min_AMPA = min_AMPA, min_NMDA=min_NMDA, models=models .* um, νs=νs .* kHz ) 
-    soma = (kie=balance_kie_soma, models = opt_kies_soma) 
-    (dend=dend, soma=soma)
+    dend = (
+        kie = balance_kie_rate,
+        gsyn = balance_kie_gsyn,
+        min_AMPA = min_AMPA,
+        min_NMDA = min_NMDA,
+        models = models .* um,
+        νs = νs .* kHz,
+    )
+    soma = (kie = balance_kie_soma, models = opt_kies_soma)
+    (dend = dend, soma = soma)
 end
 
-function get_kie(kie, n, l; nmda=false)
+function get_kie(kie, n, l; nmda = false)
     if nmda
         return kie.nmda[n, l]
     else

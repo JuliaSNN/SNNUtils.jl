@@ -360,22 +360,22 @@ end
 function compute_f1_score(confusion_matrix::Matrix{Float64})
     # Get the number of classes (assumed square matrix)
     num_classes = size(confusion_matrix, 1)
-    
+
     # Initialize arrays to store precision, recall, and F1 score for each class
     precision = zeros(Float64, num_classes)
     recall = zeros(Float64, num_classes)
     f1_score = zeros(Float64, num_classes)
-    
+
     # Compute precision, recall, and F1 score for each class
-    for i in 1:num_classes
+    for i = 1:num_classes
         TP = confusion_matrix[i, i]  # True Positive for class i
         FP = sum(confusion_matrix[:, i]) - TP  # False Positive for class i
         FN = sum(confusion_matrix[i, :]) - TP  # False Negative for class i
-        
+
         # Calculate precision and recall
         precision[i] = TP / (TP + FP)
         recall[i] = TP / (TP + FN)
-        
+
         # Calculate F1 score (handling case where precision + recall = 0)
         if precision[i] + recall[i] > 0
             f1_score[i] = 2 * (precision[i] * recall[i]) / (precision[i] + recall[i])
@@ -383,24 +383,24 @@ function compute_f1_score(confusion_matrix::Matrix{Float64})
             f1_score[i] = 0.0  # If both precision and recall are 0, set F1 score to 0
         end
     end
-    
-    (precision=precision, recall=recall, f1=f1_score)
+
+    (precision = precision, recall = recall, f1 = f1_score)
 end
 
 function compute_precision(confusion_matrix::Matrix{Float64})
     # Get the number of classes (assumed square matrix)
     num_classes = size(confusion_matrix, 1)
-    
+
     # Initialize an array to store precision for each class
     precision = zeros(Float64, num_classes)
-    
+
     # Compute precision for each class
-    for i in 1:num_classes
+    for i = 1:num_classes
         TP = confusion_matrix[i, i]  # True Positive for class i
-        FP = sum(confusion_matrix[i,:]) - TP  # False Positive for class i
+        FP = sum(confusion_matrix[i, :]) - TP  # False Positive for class i
         precision[i] = TP / (TP + FP)
     end
-    
+
     return precision
 end
 
@@ -469,10 +469,10 @@ function k_fold(vector, k, do_shuffle = false)
     end
     b = length(ns) ÷ k
     indices = Vector{Vector{Int}}()
-    for i = 1:k-1
-        push!(indices, ns[(i-1)*b+1:b*i])
+    for i = 1:(k-1)
+        push!(indices, ns[((i-1)*b+1):(b*i)])
     end
-    push!(indices, ns[1+b*(k-1):end])
+    push!(indices, ns[(1+b*(k-1)):end])
     return indices
 end
 
