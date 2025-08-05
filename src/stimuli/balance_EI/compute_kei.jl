@@ -18,6 +18,14 @@ function get_model(L, NAR, Nd; Vs = -55)
             NMDA = EyalNMDA
         )
         E = Tripod( N = 1,  param = neuron)
+        dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
+        gax = E.d1.gax[1, 1]
+        gm = E.d1.gm[1, 1]
+        C = E.param.C
+        gl = E.param.gl
+        a = E.param.a
+        Vr = E.param.Vr
+        return @symdict gax gm gl a Vs Vr C dend_syn Nd
     catch e
         @error "Error creating Tripod neuron: $e"
         ps = PostSpike(A = 10.0, τA = 30.0)
@@ -37,16 +45,15 @@ function get_model(L, NAR, Nd; Vs = -55)
         ls = repeat([L], Nd)
         E = Multipod(ls; N = 1, NMDA = EyalNMDA, param = adex, postspike = ps)
     
+        dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
+        gax = E.gax[1, 1]
+        gm = E.gm[1, 1]
+        C = E.param.C
+        gl = E.param.gl
+        a = E.param.a
+        Vr = E.param.Vr
+        return @symdict gax gm gl a Vs Vr C dend_syn Nd
     end
-    dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
-
-    gax = E.d1.gax[1, 1]
-    gm = E.d1.gm[1, 1]
-    C = E.param.C
-    gl = E.param.gl
-    a = E.param.a
-    Vr = E.param.Vr
-    return @symdict gax gm gl a Vs Vr C dend_syn Nd
 end
 
 
