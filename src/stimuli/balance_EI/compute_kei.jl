@@ -1,25 +1,47 @@
 
 function get_model(L, NAR, Nd; Vs = -55)
-    ps = PostSpike(A = 10.0, τA = 30.0)
-    adex = AdExSoma(
-        C = 281pF,
-        gl = 40nS,
-        Vr = -70.6,
-        Er = -70.6,
-        ΔT = 2,
-        Vt = 1000.0f0,
-        a = 4,
-        b = 80.5,
-        τw = 144,
-        up = 1ms,
-        τabs = 1ms,
-    )
+    try
+        neuron = DendNeuronParameter(
+            C = 281pF,
+            gl = 40nS,
+            Vr = -70.6,
+            Er = -70.6,
+            ΔT = 2,
+            Vt = 1000.0f0,
+            a = 4,
+            b = 80.5,
+            τw = 144,
+            up = 1ms,
+            τabs = 1ms,
+            ds = [L, L],
+            postspike = PostSpike(A = 10.0, τA = 30.0),
+            NMDA = EyalNMDA
+        )
+        E = Tripod( N = 1,  param = neuron)
+    catch e
+        @error "Error creating Tripod neuron: $e"
+        ps = PostSpike(A = 10.0, τA = 30.0)
+        adex = AdExSoma(
+            C = 281pF,
+            gl = 40nS,
+            Vr = -70.6,
+            Er = -70.6,
+            ΔT = 2,
+            Vt = 1000.0f0,
+            a = 4,
+            b = 80.5,
+            τw = 144,
+            up = 1ms,
+            τabs = 1ms,
+        )
+        ls = repeat([L], Nd)
+        E = Multipod(ls; N = 1, NMDA = EyalNMDA, param = adex, postspike = ps)
+    
+    end
     dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
-    ls = repeat([L], Nd)
-    E = Multipod(ls; N = 1, NMDA = EyalNMDA, param = adex, postspike = ps)
 
-    gax = E.gax[1, 1]
-    gm = E.gm[1, 1]
+    gax = E.d1.gax[1, 1]
+    gm = E.d1.gm[1, 1]
     C = E.param.C
     gl = E.param.gl
     a = E.param.a
