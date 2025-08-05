@@ -53,7 +53,6 @@ quaresima2022 = (
     soma_syn = Synapse(DuarteGluSoma, MilesGabaSoma), # defines glutamaterbic and gabaergic receptors in the soma
     dend_syn = Synapse(EyalGluDend, MilesGabaDend), # defines glutamaterbic and gabaergic receptors in the dendrites
     NMDA = EyalNMDA, # NMDA synapse
-    param = AdExSoma(Vr = -55mV, Vt = -50mV),
 )
 
 export quaresima2022,
