@@ -77,7 +77,7 @@ function Mongillo2008(; n_assemblies = 1, n_neurons = 800)
         I = CurrentStimulus(pop.I, I_dist = Normal(input_inh, 1.0), α = 1.0),
     )
 
-    model = merge_models(pop, syn, stim)
+    model = compose(pop, syn, stim)
     assemblies = map(1:n_assemblies) do x
         neurons = StatsBase.sample(1:pop.E.N, n_neurons, replace = false)
         update_weights!(syn.EE, neurons, neurons, μee_assembly)
