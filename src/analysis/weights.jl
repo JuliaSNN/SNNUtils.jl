@@ -1,6 +1,5 @@
 ## Clustering analysis with hierarchical clustering algorithm
 
-
 """
     average_weight_dynamics(pre::Vector{Int}, post::Vector{Int}, synapse::SpikingSynapse, record::Matrix{R}) where R <: Real
 
@@ -37,6 +36,30 @@ function average_weight_dynamics(
     end
     return average_t
 end
+
+function average_weight(
+    pre_pop_neurons::Vector{Int},
+    post_pop_neurons::Vector{Int},
+    synapse::SpikingSynapse,
+)
+    @unpack W = synapse
+    rowptr = synapse.rowptr
+    J = synapse.J  # Presynaptic neuron indices
+    index = synapse.index
+    all_weights = Float32[]  # Store weights for all filtered connections
+    for neuron in post_pop_neurons
+        # Get the range in W for this postsynaptic neuron's incoming connections
+        for st = rowptr[neuron]:(rowptr[neuron+1]-1)
+            st = index[st]
+            if (J[st] in pre_pop_neurons)
+                push!(all_weights, W[st])
+            end
+        end
+    end
+    return mean(all_weights)
+end
+
+
 
 export average_weight_dynamics
 
