@@ -17,6 +17,7 @@ using Statistics
 
 
 ## Functions to generate sequences of words and phonemes
+include("stimuli/sequence/stimuli.jl")
 include("stimuli/sequence/sequence.jl")
 include("stimuli/sequence/sequence_generators.jl")
 include("stimuli/sequence/inputs.jl")

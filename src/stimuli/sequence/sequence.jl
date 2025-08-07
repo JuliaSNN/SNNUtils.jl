@@ -103,7 +103,6 @@ function generate_sequence(
 
     line_id = (words = 1, phonemes = 2, duration = 3, type = 4, onset = 5, offset = 6)
     sequence = (; lexicon..., sequence = sequence, line_id = line_id)
-
 end
 
 
