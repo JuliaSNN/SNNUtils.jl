@@ -97,7 +97,23 @@ function trial_average(array::Array, sequence::Vector, dim::Int = -1)
     return spatial_code, labels
 end
 
-export trial_average
+function trial_sort(array::Array, sequence::Vector, dim::Int = -1)
+    trial_dim = dim < 0 ? ndims(array) : dim
+    labels = unique(sequence) |> sort
+
+    data = Dict{Symbol, Vector{Array}}()
+    for i in eachindex(labels)
+        sound = labels[i]
+        sound_ids = findall(==(sound), sequence)
+        data[sound] = Vector{Array}()
+        for id in sound_ids
+            push!(data[sound], copy(selectdim(array, trial_dim, id)))
+        end
+    end
+    return data, labels
+end
+
+export trial_average, trial_sort
 
 
 """
@@ -347,6 +363,7 @@ function symbols_to_int(symbols)
     end
     return symbols_int, mapping
 end
+
 """
     standardize(data::Matrix, dim = 1)
 
@@ -390,5 +407,5 @@ function do_pca(data::Matrix)
     return pca_result
 end
 
-export SVCtrain, spikecount_features, sym_features, score_spikes, pca, MultinomialLogisticRegression, symbols_to_int, standardize, do_pca
+export SVCtrain, spikecount_features, sym_features, score_spikes, pca, MultinomialLogisticRegression, symbols_to_int, standardize, do_pca, trial_average
 
