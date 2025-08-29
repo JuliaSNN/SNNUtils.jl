@@ -7,9 +7,9 @@ using StatisticalMeasures
 import SNNModels: AbstractPopulation
 
 """
-    SVCtrain(Xs, ys; seed=123, p=0.6)
+    SVCtrain(Xs, ys; seed=123, p=0.5)
     
-    Train a Support Vector Classifier with a linear kernel on the data Xs and labels ys.
+    Train a Support Vector Classifier with a linear kernel on the data Xs and labels ys. The ratio of samples used for training is determined by p. If p < 1, the data is split into training and test sets; otherwise, all data is used for training and testing.
 
     # Arguments
     - `Xs::Matrix{Float32}`: The data matrix with shape `(n_features, n_samples)`.
