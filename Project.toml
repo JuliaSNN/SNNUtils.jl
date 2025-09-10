@@ -32,7 +32,7 @@ ThreadTools = "dbf13d8f-d36e-4350-8970-f3a99faba1a8"
 
 [compat]
 BSON = "0.3"
-CategoricalArrays = "0.10"
+CategoricalArrays = "0.10, 1"
 Dates = "1.11"
 Distributions = "0.25.1"
 DrWatson = "2.19"
