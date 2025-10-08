@@ -8,7 +8,7 @@
     # Arguments
     - pre::Vector{Int}: Vector of pre-synaptic neurons
     - post::Vector{Int}: Vector of post-synaptic neurons
-    - synapse::SpikingSynapse: Synapse object
+    - synapse::SpikingSynapse: Receptors object
     - record::Matrix{R}: Matrix of recorded weights
 
     # Returns
