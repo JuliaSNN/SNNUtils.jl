@@ -14,7 +14,7 @@
 #     - `decay`: The decay rate for the function.
 #     - `peak`: The peak rate for the function.
 #     - `start`: The start rate for the function.
-    
+
 #     The attack decay function is defined as:
 
 #     f(x) = peak + (start-peak) *(exp(-(x-my_interval)/decay))

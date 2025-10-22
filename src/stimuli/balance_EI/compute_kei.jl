@@ -43,9 +43,9 @@ function get_model(L, NAR, Nd; Vs = -55)
             τabs = 1ms,
             ds = [L, L],
             postspike = PostSpike(A = 10.0, τA = 30.0),
-            NMDA = EyalNMDA
+            NMDA = EyalNMDA,
         )
-        E = Tripod( N = 1,  param = neuron)
+        E = Tripod(N = 1, param = neuron)
         dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
         gax = E.d1.gax[1, 1]
         gm = E.d1.gm[1, 1]
@@ -72,7 +72,7 @@ function get_model(L, NAR, Nd; Vs = -55)
         )
         ls = repeat([L], Nd)
         E = Multipod(ls; N = 1, NMDA = EyalNMDA, param = adex, postspike = ps)
-    
+
         dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
         gax = E.gax[1, 1]
         gm = E.gm[1, 1]

@@ -54,7 +54,7 @@ function step_input(;
     proj_strength::Real, # strength of the synaptic projection
     rate_function = attack_decay, # function to generate the rate
     kwargs...,
-    )
+)
 
     target_pop = getfield(network.pop, pop)
     stim = Dict{Symbol,Any}()

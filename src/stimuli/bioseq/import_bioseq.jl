@@ -133,8 +133,7 @@ function store_experiment_data(path, exp, network, seq)
         exc = network.pop.E.N
         pv = network.pop.I1.N
         sst = network.pop.I2.N
-        cumsum([1, exc, sst, pv]) |>
-        x -> [collect(x[n]:(x[n+1]-1)) for n = 1:(length(x)-1)]
+        cumsum([1, exc, sst, pv]) |> x -> [collect(x[n]:(x[n+1]-1)) for n = 1:(length(x)-1)]
     end
 
     DrWatson.save(joinpath(_root, "mapping.h5"), mapping)
