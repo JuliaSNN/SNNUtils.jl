@@ -1,7 +1,7 @@
 name = "SNNUtils"
 uuid = "df079cdf-2344-43fe-90b5-fc41d8d26db7"
-authors = ["alequa <alessio.quaresima@pasteur.fr>"]
 version = "0.2.5"
+authors = ["alequa <alessio.quaresima@pasteur.fr>"]
 
 [deps]
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
@@ -42,7 +42,7 @@ JLD2 = "0.5, 0.6"
 JSON = "0.21, 1"
 LIBSVM = "0.8"
 LinearAlgebra = "1.11"
-MLJ = "0.20, 0.21"
+MLJ = "0.20, 0.21, 0.22"
 MultivariateStats = "0.10"
 NPZ = "0.4"
 Parameters = "0.12"
