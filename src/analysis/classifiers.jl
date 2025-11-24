@@ -166,7 +166,7 @@ end
 function sym_features(sym::Symbol, pop::T, offsets::Vector) where {T<:AbstractPopulation}
     N = pop.N
     X = zeros(N, length(offsets))
-    var, r_v = interpolated_record(pop, sym)
+    var, r_v = SNN.record(pop, sym, range = true)
     Threads.@threads for i in eachindex(offsets)
         offset = offsets[i]
         offset[end] > r_v[end] && continue

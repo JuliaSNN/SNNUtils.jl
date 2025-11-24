@@ -11,7 +11,6 @@ using Serialization
 using BSON
 using JSON
 using ThreadTools
-using RollingFunctions
 using StatsBase
 using Statistics
 
