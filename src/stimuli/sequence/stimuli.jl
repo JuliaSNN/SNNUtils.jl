@@ -10,9 +10,7 @@
     p_post::Real,  # probability of post_synaptic projection
     peak_rate::Real, # peak rate of the stimulus
     start_rate::Real, # start rate of the stimulus
-    decay_rate::Real, # decay rate of attack-peak function
     proj_strength::Real, # strength of the synaptic projection
-    rate_function = attack_decay, # function to generate the rate
     kwargs...,
 )
 
@@ -27,9 +25,7 @@ Create a step input stimulus for a neural network simulation.
 - `p_post::Real`: Probability of post-synaptic projection
 - `peak_rate::Real`: Peak rate of the stimulus
 - `start_rate::Real`: Start rate of the stimulus
-- `decay_rate::Real`: Decay rate for the attack-peak function
 - `proj_strength::Real`: Strength of the synaptic projection
-- `rate_function`: Function to generate the rate (default: attack_decay)
 - `kwargs...`: Additional keyword arguments
 
 # Returns
@@ -40,76 +36,31 @@ connecting them to the specified target population in the network. Each stimulus
 with the specified parameters and rate function.
 """
 function step_input(;
-    lexicon, # optionally provide a sequence
+    inputs, # optionally provide a sequence
     network::NamedTuple, # network object
 
     ## Projection parameters
     sym::Symbol = :glu,
-    targets::Union{Vector{Symbol},Vector{Nothing}},  # target neuron's compartments
-    pop::Symbol = :E,  # target population
+    targets::Union{Vector{Symbol},Vector{Nothing}} = [nothing],  # target neuron's compartments
+    pop::Symbol = :Exc,  # target population
     p_post::Real,  # probability of post_synaptic projection
     peak_rate::Real, # peak rate of the stimulus
-    start_rate::Real, # start rate of the stimulus
-    decay_rate::Real, # decay rate of attack-peak function
     proj_strength::Real, # strength of the synaptic projection
-    rate_function = attack_decay, # function to generate the rate
     kwargs...,
 )
 
     target_pop = getfield(network.pop, pop)
     stim = Dict{Symbol,Any}()
-    variables = Dict(
-        :decay=>decay_rate,
-        :peak=>peak_rate,
-        :start=>start_rate,
-        :intervals=>Float32[],
-    )
-
-    for s in lexicon.symbols.words
-        param = PSParam(rate = rate_function, variables = copy(variables))
-        _my_targets = Dict{Symbol,Any}()
-        for t in targets
-            key = isnothing(t) ? :v : t
-            my_input = PoissonStimulus(
-                target_pop,
-                sym,
-                t,
-                μ = proj_strength,
-                param = param,
-                name = "w_$s",
-                p_post = p_post,
-            )
-            push!(_my_targets, key => my_input)
-        end
-        if length(_my_targets) > 1
-            push!(stim, s => _my_targets |> dict2ntuple)
-        else
-            push!(stim, s => first(_my_targets)[2])
-        end
-    end
-    for s in lexicon.symbols.phonemes
-        param = PSParam(rate = rate_function, variables = copy(variables))
-        push!(stim, s => Dict{Symbol,Any}())
-        _my_targets = Dict{Symbol,Any}()
-        for t in targets
-            key = isnothing(t) ? :v : t
-            my_input = PoissonStimulus(
-                target_pop,
-                sym,
-                t,
-                μ = proj_strength,
-                param = param,
-                name = "p_$s",
-                p_post = p_post,
-            )
-            push!(_my_targets, key => my_input)
-        end
-
-        if length(_my_targets) > 1
-            push!(stim, s => _my_targets |> dict2ntuple)
-        else
-            push!(stim, s => first(_my_targets)[2])
-        end
+    for s in inputs
+        param = PoissonInterval(rate = peak_rate, μ = proj_strength)
+        my_input = StimulusGroup(
+            param, 
+            target_pop,
+            sym,
+            targets;
+            name = "$(s)",
+        )
+        push!(stim, Symbol(s) => my_input)
     end
     return (stim |> dict2ntuple)
 end
