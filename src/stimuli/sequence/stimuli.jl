@@ -48,6 +48,8 @@ function step_input(;
     proj_strength::Real, # strength of the synaptic projection
     kwargs...,
 )
+    @info "Creating step input stimulus for symbols: $(inputs)"
+    @info "Projection parameters: sym=$(sym), targets=$(targets), pop=$(pop), p_post=$(p_post), peak_rate=$(peak_rate), proj_strength=$(proj_strength)"
 
     target_pop = getfield(network.pop, pop)
     stim = Dict{Symbol,Any}()
@@ -58,6 +60,8 @@ function step_input(;
             target_pop,
             sym,
             targets;
+            p_post,
+            neurons = :p_post,
             name = "$(s)",
         )
         push!(stim, Symbol(s) => my_input)
@@ -85,19 +89,21 @@ For each target compartment, it activates or deactivates stimuli based on the `w
 `phonemes` boolean flags. The stimuli are identified by combining the symbol with the target
 compartment name.
 """
-function set_stimuli!(; model, targets::Vector{Symbol}, seq, words = true, phonemes = true)
+function set_stimuli!(; model, seq, words = true, phonemes = true)
     @unpack stim = model
-    for target in targets
-        for s in seq.symbols.words
-            word = Symbol(string(s, "_", target))
-            stim[word].param.active[1] = words
-        end
-        for s in seq.symbols.phonemes
-            ph = Symbol(string(s, "_", target))
-            stim[ph].param.active[1] = phonemes
-        end
+    for w in seq.symbols.words
+        w = Symbol(string("w_", w))
+        haskey(stim, w) || continue
+        SNNModels.set_active!(stim[w], words)
+    end
+    for p in seq.symbols.phonemes
+        ph = Symbol(string("p_", p))
+        haskey(stim, ph) || continue
+        SNNModels.set_active!(stim[ph], phonemes)
     end
 end
+
+
 
 """
     update_stimuli!(; seq, model, targets::Vector{Symbol})
@@ -117,18 +123,20 @@ For each target compartment, it retrieves the timing intervals from the sequence
 updates the corresponding stimulus parameters. The stimuli are identified by combining the
 symbol with the target compartment name.
 """
-function update_stimuli!(; seq, model, targets::Vector{Symbol})
-    for target in targets
-        for w in seq.symbols.words
-            s = Symbol(string(w, "_", target))
-            ints = copy(sign_intervals(w, seq))
-            model.stim[s].param.variables[:intervals] = ints
-        end
-        for p in seq.symbols.phonemes
-            s = Symbol(string(p, "_", target))
-            ints = copy(sign_intervals(p, seq))
-            model.stim[s].param.variables[:intervals] = ints
-        end
+function update_stimuli!(; seq, model)
+    for w in seq.symbols.words
+        s = Symbol(string("w_", w))
+        ints = copy(sign_intervals(w, seq))
+        haskey(model.stim, s) || continue
+        set_intervals!(model.stim[s], ints)
+    end
+    for p in seq.symbols.phonemes
+        s = Symbol(string("p_", p))
+        ints = copy(sign_intervals(p, seq))
+        haskey(model.stim, s) || continue
+        set_intervals!(model.stim[s], ints)
     end
     return model
 end
+
+export step_input, set_stimuli!, update_stimuli!

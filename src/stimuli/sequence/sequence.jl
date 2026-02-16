@@ -258,8 +258,20 @@ Create a dictionary mapping each word in `words` to a vector of symbols represen
 # Returns
 A dictionary mapping each word to a vector of symbols representing its letters.
 """
-function getdictionary(words::Vector{T}) where {T<:Union{String,Symbol}}
-    Dict(Symbol(word) => [Symbol(letter) for letter in string(word)] for word in words)
+function getdictionary(words::Vector{T}, insert=nothing) where {T<:Union{String,Symbol}}
+    dict = Dict{Symbol,Vector{Symbol}}()
+    if !isnothing(insert)
+        for word in words
+            phonemes = vcat([[Symbol(x), Symbol(insert)] for x in collect(string(word))]...)[1:end-1]
+            push!(dict, Symbol(word) => phonemes)
+        end
+    else 
+        for word in words
+            phonemes = [Symbol(x) for x in collect(string(word))]
+            push!(dict, Symbol(word) => phonemes)
+        end
+    end
+    dict
 end
 
 """
@@ -279,6 +291,14 @@ function getphonemes(dictionary::Dict{Symbol,Vector{Symbol}})
     return phs
 end
 
+
+function get_lexicon(words, duration, insert = nothing)
+    dictionary = getdictionary(words, insert)
+    duration = getduration(dictionary, duration)
+    config_lexicon = (ph_duration = duration, dictionary = dictionary)
+    return generate_lexicon(config_lexicon)
+end
+
 """
     getduration(dictionary::Dict{Symbol, Vector{Symbol}}, duration::R) where R <: Real
 
@@ -294,6 +314,21 @@ A dictionary mapping each phoneme to the specified `duration`.
 function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::R) where {R<:Real}
     phonemes = getphonemes(dictionary)
     Dict(Symbol(phoneme) => Float32(duration) for phoneme in phonemes)
+end
+
+function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::NamedTuple)
+    dict = Dict{Symbol,Float32}()
+    phonemes = getphonemes(dictionary)
+    for phoneme in phonemes
+        if haskey(duration, Symbol(phoneme))
+            push!(dict, Symbol(phoneme) => getfield(duration, Symbol(phoneme)))
+        elseif phoneme == :_
+            push!(dict, Symbol(phoneme) => getfield(duration, :silence))
+        else
+             throw(ErrorException("Duration for phoneme $phoneme not found in duration NamedTuple"))
+        end
+    end
+    dict
 end
 
 """
@@ -327,6 +362,17 @@ function getstimsym(word, target)
     return Symbol(string(word)*target)
 end
 
+function stimuli_names(lexicon)
+    words = map(lexicon.symbols.words) do word
+         Symbol(string("w_", word))
+    end
+    phonemes = map(lexicon.symbols.phonemes) do phoneme
+         Symbol(string("p_", phoneme))
+    end
+    return words, phonemes
+end
+
+
 export getstim, getstimsym
 
 export generate_sequence,
@@ -339,8 +385,10 @@ export generate_sequence,
     getduration,
     getphonemes,
     symbolnames,
+    get_lexicon,
     getneurons,
     all_intervals,
+    stimuli_names,
     generate_balanced_sequence
 
 
