@@ -1,11 +1,14 @@
 name = "SNNUtils"
 uuid = "df079cdf-2344-43fe-90b5-fc41d8d26db7"
-authors = ["alequa <alessio.quaresima@pasteur.fr>"]
 version = "0.2.5"
+authors = ["alequa <alessio.quaresima@pasteur.fr>"]
 
 [deps]
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataFramesMeta = "1313f7d8-7da2-5740-9ea0-a2ca25f37964"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
@@ -31,7 +34,10 @@ ThreadTools = "dbf13d8f-d36e-4350-8970-f3a99faba1a8"
 
 [compat]
 BSON = "0.3"
+CSV = "0.10.16"
 CategoricalArrays = "0.10, 1"
+DataFrames = "1.8.1"
+DataFramesMeta = "0.15.6"
 Dates = "1.11"
 Distributions = "0.25.1"
 DrWatson = "2.19"

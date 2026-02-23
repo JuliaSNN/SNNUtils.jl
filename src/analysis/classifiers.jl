@@ -21,7 +21,48 @@ import SNNModels: AbstractPopulation
 
 """
 function SVCtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
-    X = Xs .+ 1e-2
+    X = Xs .+ randn(size(Xs)) .* 1e-5
+    y = string.(ys)
+    y = CategoricalVector(string.(ys))
+    @assert length(y) == size(Xs, 2)
+    if p < 1
+        train, test = partition(eachindex(y), p, rng = seed, stratify = y)
+        # n = 1
+        if length(train)<2 || length(test)<2
+            @error "Not enough samples in train or test set"
+            Xtrain = X
+            Xtest = X
+            ytrain = y
+            ytest = y
+        else
+            ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:, train], dims = 2)
+            Xtrain = StatsBase.transform(ZScore, X[:, train])
+            Xtest = StatsBase.transform(ZScore, X[:, test])
+
+            ytrain = y[train]
+            ytest = y[test]
+        end
+    else
+        Xtrain = X
+        Xtest = X
+        ytrain = y
+        ytest = y
+    end
+
+    # pca_model_X = SNNUtils.fit(SNNUtils.PCA, Xtrain)
+    # Xtrain = MultivariateStats.predict(pca_model_X, Xtrain)[1:250,:]
+    # Xtest = MultivariateStats.predict(pca_model_X, Xtest)[1:250,:]
+
+    @assert size(Xtrain, 2) == length(ytrain)
+    mach = svmtrain(Xtrain, ytrain, kernel = Kernel.Linear, cost=0.01)
+    ŷ, decision_values = svmpredict(mach, Xtest);
+    confusion_matrix = confmat(ŷ, ytest)
+    score = kappa(confusion_matrix)
+    return score, confusion_matrix
+end
+
+function LogRegtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
+    X = Xs .+ 1e-5
     y = string.(ys)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
@@ -59,6 +100,8 @@ function SVCtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
     # else
     #     return mean(ŷ .== ytest)
     # end
+
+    
 end
 
 """
@@ -207,7 +250,7 @@ end
     - The function uses parallel processing with a spin lock for thread safety.
     - Spike activity is binned at 10ms intervals for analysis.
 """
-function score_spikes(model, seq, target_interval = :offset, delay = nothing, pop = :E)
+function score_spikes(model, seq, target_interval = :offset, delay = nothing, pop = :Exc)
     ## Get word intervals 
     offsets_ids = findall(seq.sequence[seq.line_id.type, :] .== target_interval)
     words = seq.sequence[seq.line_id.words, offsets_ids]
@@ -217,10 +260,10 @@ function score_spikes(model, seq, target_interval = :offset, delay = nothing, po
         throw("No target intervals found in sequence")
     end
     ## Get word assemblies
-    labels, neurons = subpopulations(filter(x->!occursin("noise", x.name), model.stim))
-    word_assemblies =
-        Dict(
-            Symbol(labels[n][3:end]) => neurons[n] for
+    @unpack names, populations = subpopulations(filter(x->!occursin("noise", x.name), model.stim))
+    labels = names
+    word_assemblies = Dict(
+            Symbol(labels[n][3:end]) => populations[n] for
             n in eachindex(labels) if startswith(labels[n], "w_")
         ) |> dict2ntuple
     word_list = keys(word_assemblies) |> collect |> sort
@@ -309,7 +352,7 @@ function MultinomialLogisticRegression(
     test_ratio = 0.5,
 )
     n_classes = length(Set(labels))
-    y = labels_to_y(labels)
+    y, mapping = symbols_to_int(Symbol.(labels))
     n_features = size(X, 1)
 
     train, test = make_set_index(length(y), test_ratio)

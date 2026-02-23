@@ -98,7 +98,7 @@ function generate_sequence(
         (sequence[1, n] == :_) && (sequence[4, n] = :silence)
     end
 
-    sequence[5, :] .= [0ms, cumsum(sequence[3, 2:end])...]
+    sequence[5, :] .= [0ms, cumsum(sequence[3, 1:end])[1:end-1]...]
     sequence[6, :] .= [cumsum(sequence[3, 1:end])...]
 
     line_id = (words = 1, phonemes = 2, duration = 3, type = 4, onset = 5, offset = 6)
@@ -122,6 +122,7 @@ Given a sign symbol and a sequence, this function identifies the line of the seq
 """
 function sign_intervals(sign::Symbol, sequence)
     @unpack dict, sequence, symbols, line_id = sequence
+
     ## Identify the line of the sequence that contains the sign
     sign_line_id = -1
     for k in keys(symbols)
@@ -136,9 +137,7 @@ function sign_intervals(sign::Symbol, sequence)
 
     ## Find the intervals where the sign is present
     intervals = Vector{Vector{Float32}}()
-    # cum_duration = cumsum(sequence[line_id.duration,:])
-    # _end = 1
-    # interval = [-1, -1]
+
     my_seq = sequence[sign_line_id, :]
     time_counter = 0
     for i in eachindex(my_seq)
@@ -169,11 +168,33 @@ function sign_intervals(sign::Symbol, sequence)
 end
 
 
+function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
+    merged_intervals = Vector{Vector{Float32}}()
+    start_interval = -1
+    end_interval = -1
+    for i in eachindex(intervals)
+        local_start, local_end = intervals[i]
+        if start_interval == -1
+            start_interval = local_start
+            end_interval = local_end
+        else
+            if end_interval == local_start
+                end_interval = max(end_interval, local_end)
+            else
+                push!(merged_intervals, [start_interval, end_interval])
+                start_interval = -1
+                end_interval = -1
+            end
+        end
+    end
+    merged_intervals
+end
+
+
 function all_intervals(sym::Symbol, sequence; interval::Vector = [-50ms, 100ms])
     offsets = Vector{Vector{Float32}}()
     ys = Vector{Symbol}()
     symbols = getfield(sequence.symbols, sym)
-    @show symbols
     for word in symbols
         for myinterval in sign_intervals(word, sequence)
             offset = myinterval[end] .+ interval
@@ -349,7 +370,6 @@ end
 function getneurons(stim, symbol, target = nothing)
     target = (target == :s) || isnothing(target) ? "" : "_$target"
     target = Symbol(string(symbol, target))
-    @show target
     return collect(Set(getfield(stim, target).neurons))
 end
 

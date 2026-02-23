@@ -14,6 +14,8 @@ using ThreadTools
 using StatsBase
 using Statistics
 
+DATA_PATH = joinpath(@__DIR__, "..", "data") 
+@assert isdir(DATA_PATH) "Data directory not found at $DATA_PATH. Please ensure the data directory exists and contains the necessary files."
 
 ## Functions to generate sequences of words and phonemes
 include("stimuli/sequence/stimuli.jl")
@@ -29,7 +31,7 @@ include("stimuli/balance_EI/bimodal_kernel.jl")
 include("stimuli/bioseq/import_bioseq.jl")
 
 ## Collection of parameters, not included in this version. Move it to SpikingNeuralNetworks.jl
-# include("models/models.jl")
+include("models/stp_het.jl")
 
 ## Functions to analyse the network structure
 include("analysis/weights.jl")
