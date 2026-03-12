@@ -5,6 +5,14 @@ using MultivariateStats
 using LinearAlgebra
 using StatisticalMeasures
 import SNNModels: AbstractPopulation
+using ScientificTypes
+using MLJ
+using Tables
+using MLJLinearModels
+using DataFrames
+using MLJTransforms
+using Logging
+MultinomialClassifier = MLJ.@load MultinomialClassifier pkg=MLJLinearModels
 
 """
     SVCtrain(Xs, ys; seed=123, p=0.5)
@@ -27,7 +35,6 @@ function SVCtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
     @assert length(y) == size(Xs, 2)
     if p < 1
         train, test = partition(eachindex(y), p, rng = seed, stratify = y)
-        # n = 1
         if length(train)<2 || length(test)<2
             @error "Not enough samples in train or test set"
             Xtrain = X
@@ -49,10 +56,6 @@ function SVCtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
         ytest = y
     end
 
-    # pca_model_X = SNNUtils.fit(SNNUtils.PCA, Xtrain)
-    # Xtrain = MultivariateStats.predict(pca_model_X, Xtrain)[1:250,:]
-    # Xtest = MultivariateStats.predict(pca_model_X, Xtest)[1:250,:]
-
     @assert size(Xtrain, 2) == length(ytrain)
     mach = svmtrain(Xtrain, ytrain, kernel = Kernel.Linear, cost=0.01)
     ŷ, decision_values = svmpredict(mach, Xtest);
@@ -61,47 +64,41 @@ function SVCtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
     return score, confusion_matrix
 end
 
-function LogRegtrain(Xs, ys; seed = 123, p = 0.5, labels = false)
-    X = Xs .+ 1e-5
-    y = string.(ys)
+function LogRegtrain(Xs, ys; seed = 123, p = 0.5, gamma=0, lambda=0.5)
+    X = Xs .+ randn(size(Xs)) .* 1e-5
+    X = DataFrame(X', :auto)
     y = CategoricalVector(string.(ys))
     @assert length(y) == size(Xs, 2)
-    if p < 1
-        train, test = partition(eachindex(y), p, rng = seed, stratify = y)
-        # n = 1
-        if length(train)<2 || length(test)<2
-            @error "Not enough samples in train or test set"
-            Xtrain = X
-            Xtest = X
-            ytrain = y
-            ytest = y
-        else
-            ZScore = StatsBase.fit(StatsBase.ZScoreTransform, X[:, train], dims = 2)
-            Xtrain = StatsBase.transform(ZScore, X[:, train])
-            Xtest = StatsBase.transform(ZScore, X[:, test])
-            ytrain = y[train]
-            ytest = y[test]
-        end
+
+    if p < 1 
+        (X_train, X_test), (y_train, y_test) = partition((X,y), p, stratify=y, rng=seed, multi=true)
     else
-        Xtrain = X
-        Xtest = X
-        ytrain = y
-        ytest = y
+        X_train = X
+        X_test = X
+        y_train = y
+        y_test = y
     end
 
-    @assert size(Xtrain, 2) == length(ytrain)
-    mach = svmtrain(Xtrain, ytrain, kernel = Kernel.Linear)
-    ŷ, decision_values = svmpredict(mach, Xtest);
-    confusion_matrix = confmat(ŷ, ytest)
-    score = kappa(confusion_matrix)
-    return score, confusion_matrix
-    # if labels
-    #     return ŷ, ytest, mean(ŷ .== ytest)
-    # else
-    #     return mean(ŷ .== ytest)
-    # end
+    with_logger(ConsoleLogger(stderr, Logging.Warn)) do
+         mdl = MultinomialClassifier(lambda=lambda, fit_intercept=false)
+         zscore = machine(MLJ.Standardizer(), X_train)
+         MLJ.fit!(zscore)
+         X_train_std = MLJ.transform(zscore, X_train)
+         X_test_std = MLJ.transform(zscore, X_test)
+         mach = MLJ.fit!(MLJ.machine(mdl, X_train_std, y_train))
+        ypred = MLJ.predict_mode(mach, X_test_std)
+        confusion_matrix = confmat(ypred, y_test)
+        score = kappa(confusion_matrix)
 
-    
+        return score, confusion_matrix
+    end
+    # mdl = MultinomialClassifier(;gamma, lambda)
+    # zscore = machine(MLJ.Standardizer(), X_train)
+    # MLJ.fit!(zscore)
+    # X_train_std = MLJ.transform(zscore, X_train)
+    # X_test_std = MLJ.transform(zscore, X_test)
+    # mach = MLJ.fit!(MLJ.machine(mdl, X_train_std, y_train))
+
 end
 
 """
@@ -250,7 +247,7 @@ end
     - The function uses parallel processing with a spin lock for thread safety.
     - Spike activity is binned at 10ms intervals for analysis.
 """
-function score_spikes(model, seq, target_interval = :offset, delay = nothing, pop = :Exc)
+function score_spikes(model, seq, target_interval = :offset; delay = nothing, pop = :Exc)
     ## Get word intervals 
     offsets_ids = findall(seq.sequence[seq.line_id.type, :] .== target_interval)
     words = seq.sequence[seq.line_id.words, offsets_ids]
@@ -260,12 +257,16 @@ function score_spikes(model, seq, target_interval = :offset, delay = nothing, po
         throw("No target intervals found in sequence")
     end
     ## Get word assemblies
-    @unpack names, populations = subpopulations(filter(x->!occursin("noise", x.name), model.stim))
-    labels = names
-    word_assemblies = Dict(
-            Symbol(labels[n][3:end]) => populations[n] for
-            n in eachindex(labels) if startswith(labels[n], "w_")
-        ) |> dict2ntuple
+    all_populations = subpopulations(filter(x->!occursin("noise", x.name), model.stim))
+    word_assemblies = Dict{Symbol, Vector{Int}}()
+    for label in keys(all_populations)
+        word = string(label)
+        if startswith(word, "w_")
+            word_assemblies[Symbol(word[3:end])] = all_populations[label]
+        end
+    end
+    word_assemblies = word_assemblies |> dict2ntuple
+
     word_list = keys(word_assemblies) |> collect |> sort
     word_count = [count(x->x==word, words) for word in word_list]
     assemblies = [word_assemblies[word] for word in word_list]
@@ -446,8 +447,8 @@ end
 """
 function do_pca(data::Matrix)
     data = standardize(data)
-    pca_result = fit(PCA, data;)
-    return pca_result
+    pca_result = MultivariateStats.fit(PCA, data;)
+    return MultivariateStats.transform(pca_result, data)
 end
 
 export SVCtrain,

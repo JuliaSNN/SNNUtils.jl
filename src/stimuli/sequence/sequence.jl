@@ -71,32 +71,47 @@ function generate_sequence(
     @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
     ## sequence from the initial word sequence
-    sequence = Matrix{Any}(fill(silence, 6, seq_length+1))
-    sequence[1, 1] = silence
-    sequence[2, 1] = silence
-    sequence[3, 1] = ph_duration[silence]
-    for (n, (w, p)) in enumerate(zip(words, phonemes))
-        sequence[1, 1+n] = w
-        sequence[2, 1+n] = p
-        sequence[3, 1+n] = ph_duration[p]
-    end
+    word_line = 1
+    phoneme_line = 2
+    duration_line = 3
+    type_line = 4
+    onset_line = 5
+    offset_line = 6
+    max_word_length = 20
 
-    sequence[4, :] .= :mid
-    for n in axes(sequence, 2)[1:(end-2)]
-        if !(sequence[1, n+1] == sequence[1, n])
-            sequence[4, 1+n] = :onset
-        end
-        if !(sequence[1, n+1] == sequence[1, n+2])
-            sequence[4, 1+n] = :offset
-            j = 2
-            while !(sequence[4, n+1-j] == :onset)
-                sequence[4, 1+n-j] = Symbol("offset$j")
+    sequence = Matrix{Any}(fill(silence, 6, seq_length+2))
+    sequence[word_line, 1] = silence
+    sequence[phoneme_line, 1] = silence
+    sequence[duration_line, 1] = ph_duration[silence]
+    for (n, (w, p)) in enumerate(zip(words, phonemes))
+        sequence[word_line, 1+n] = w
+        sequence[phoneme_line, 1+n] = p
+        sequence[duration_line, 1+n] = ph_duration[p]
+    end
+    sequence[word_line, end] = silence
+    sequence[phoneme_line, end] = silence
+    sequence[duration_line, end] = ph_duration[silence]
+
+    sequence[type_line, :] .= :silence
+    n = 2
+    while n < size(sequence, 2)
+        word_offset = (sequence[word_line, n+1] !== sequence[word_line, n]) && (sequence[word_line, n] !== silence)
+        if word_offset
+            sequence[type_line, n] = :offset
+            j = 1
+            while sequence[word_line, n] == sequence[word_line, n-j]
+                sequence[type_line, n-j] = Symbol("offset_$(j+1)")
                 j += 1
             end
-            sequence
+            j -= 1
+            sequence[type_line, n-j] = :onset
         end
-        (sequence[1, n] == :_) && (sequence[4, n] = :silence)
+        if sequence[phoneme_line, n] == :_
+            sequence[type_line, n] = :silence
+        end
+        n += 1
     end
+
 
     sequence[5, :] .= [0ms, cumsum(sequence[3, 1:end])[1:end-1]...]
     sequence[6, :] .= [cumsum(sequence[3, 1:end])...]
@@ -170,23 +185,32 @@ end
 
 function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
     merged_intervals = Vector{Vector{Float32}}()
-    start_interval = -1
-    end_interval = -1
-    for i in eachindex(intervals)
+    all_intervals = length(intervals)
+
+    current_start = :new_item
+    current_end = nothing
+    i = 0 
+    while i < all_intervals
+        i+=1
         local_start, local_end = intervals[i]
-        if start_interval == -1
-            start_interval = local_start
-            end_interval = local_end
-        else
-            if end_interval == local_start
-                end_interval = max(end_interval, local_end)
-            else
-                push!(merged_intervals, [start_interval, end_interval])
-                start_interval = -1
-                end_interval = -1
-            end
+        if current_start == :new_item
+            current_start = local_start
+            current_end = local_end
+            continue
+        end
+        ## if the current end is the same as the local start, we merge the intervals by updating the current end to the local end
+        if current_end == local_start
+            current_end = local_end
+        ## if the current end is different from the local start, we push the current interval to the merged intervals and start a new interval with the local start and local end
+        elseif i < all_intervals
+            push!(merged_intervals, [current_start, current_end])
+            current_start = local_start
+            current_end = local_end
+            # @info "Merged $(length(merged_intervals)) intervals: $current_start, $current_end at index $i"
         end
     end
+    # @info "Last interval: $current_start, $current_end"
+    push!(merged_intervals, [current_start, current_end])   
     merged_intervals
 end
 
@@ -312,6 +336,12 @@ function getphonemes(dictionary::Dict{Symbol,Vector{Symbol}})
     return phs
 end
 
+function getwords(dictionary::Dict{Symbol,Vector{Symbol}})
+    phs = collect(unique(vcat(keys(dictionary)...)))
+    push!(phs, :_)
+    return phs
+end
+
 
 function get_lexicon(words, duration, insert = nothing)
     dictionary = getdictionary(words, insert)
@@ -352,20 +382,6 @@ function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::NamedTup
     dict
 end
 
-"""
-    symbolnames(seq)
-
-    Get the names of phonemes and words from the given sequence.
-    Words are prefixed with 'w_'.
-
-"""
-function symbolnames(seq)
-    phonemes = String[]
-    words = String[]
-    [push!(phonemes, string.(ph)) for ph in seq.symbols.phonemes]
-    [push!(words, "w_"*string(w)) for w in seq.symbols.words]
-    return (phonemes = phonemes, words = words)
-end
 
 function getneurons(stim, symbol, target = nothing)
     target = (target == :s) || isnothing(target) ? "" : "_$target"
@@ -382,6 +398,7 @@ function getstimsym(word, target)
     return Symbol(string(word)*target)
 end
 
+
 function stimuli_names(lexicon)
     words = map(lexicon.symbols.words) do word
          Symbol(string("w_", word))
@@ -389,7 +406,22 @@ function stimuli_names(lexicon)
     phonemes = map(lexicon.symbols.phonemes) do phoneme
          Symbol(string("p_", phoneme))
     end
-    return words, phonemes
+    return (;words, phonemes, all=vcat(words, phonemes))
+end
+
+"""
+    symbolnames(seq)
+
+    Get the names of phonemes and words from the given sequence.
+    Words are prefixed with 'w_'.
+
+"""
+function symbol_names(seq)
+    phonemes = Symbol[]
+    words = Symbol[]
+    [push!(phonemes, ph) for ph in seq.symbols.phonemes]
+    [push!(words, w) for w in seq.symbols.words]
+    return (phonemes = phonemes, words = words, all = vcat(words, phonemes))
 end
 
 
@@ -404,12 +436,13 @@ export generate_sequence,
     getdictionary,
     getduration,
     getphonemes,
-    symbolnames,
+    symbol_names,
     get_lexicon,
     getneurons,
     all_intervals,
     stimuli_names,
-    generate_balanced_sequence
+    generate_balanced_sequence,
+    merge_intervals
 
 
 function generate_balanced_sequence(sounds, sequence_length)
@@ -428,3 +461,4 @@ function generate_balanced_sequence(sounds, sequence_length)
 
     return shuffled_sequence
 end
+

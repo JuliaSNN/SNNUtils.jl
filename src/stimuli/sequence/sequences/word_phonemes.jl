@@ -19,11 +19,14 @@ Generate a random word sequence of a given length using a dictionary of words an
 function word_phonemes_sequence(;
     lexicon,
     weights = nothing,
+    mode = :fixed,
     seed = nothing,
     silent_intervals = 1,
     presentations,
     kwargs...,
 )
+    @assert mode in [:fixed, :random, :balanced] "Mode must be one of :fixed, :random, or :balanced"
+    @info "Generating word sequence with mode: $mode, presentations: $presentations"
 
     @unpack dict, symbols, silence, ph_duration = lexicon
     if seed !== nothing
@@ -32,24 +35,37 @@ function word_phonemes_sequence(;
 
     lexicon_words = collect(keys(dict))
 
-    word_count = Dict(word => 1 for word in lexicon_words)
+    word_count = Dict(word => 0 for word in lexicon_words)
     weight_list = nothing
-    balanced = nothing
-    if isnothing(weights) 
-        balanced = true
+    @show mode
+    if  mode == :balanced
         weight_list = map(lexicon_words) do word
                         exp(-1/word_count[word])
                     end
-    else
-        balanced = false
+    elseif mode == :random
         weight_list = map(lexicon_words) do word
                         haskey(weights, word) ? weights[word] : 0
                     end
+    elseif mode == :fixed
+        total_weight = sum(values(weights))
+        word_list = []
+        for (word, weight) in pairs(weights)
+            count = floor(Int, weight * presentations / total_weight)
+            append!(word_list, fill(word, count))
+        end
+        shuffle!(word_list)
     end
 
     words, phonemes = [], []
     while sum(values(word_count)) < presentations
-        current_word = StatsBase.sample(lexicon_words, StatsBase.Weights(weight_list))
+        if mode == :fixed
+            current_word = pop!(word_list)
+        elseif mode == :balanced
+            weight_list =[exp(-word_count[word]) for word in lexicon_words]
+            current_word = StatsBase.sample(lexicon_words, StatsBase.Weights(weight_list))
+        else
+            current_word = StatsBase.sample(lexicon_words, StatsBase.Weights(weight_list))
+        end
         word_phonemes = dict[current_word]
         word_count[current_word] += 1
 
@@ -62,15 +78,11 @@ function word_phonemes_sequence(;
             push!(words, silence)
             push!(phonemes, silence)
         end
-
-        push!(words, silence)
-        push!(phonemes, silence)
-
-        if balanced 
-            weight_list =[1/word_count[word] for word in lexicon_words]
-        end
     end
+    push!(words, silence)
+    push!(phonemes, silence)
     seq_length = length(words)
+    @show word_count
 
     return words, phonemes, seq_length
 end
