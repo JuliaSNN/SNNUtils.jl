@@ -55,7 +55,7 @@ function step_input(;
     stim = Dict{Symbol,Any}()
     for s in inputs
         param = PoissonInterval(rate = peak_rate, μ = proj_strength)
-        my_input = StimulusGroup(
+        my_input = MultiCompartmentStimulusGroup(
             param, 
             target_pop,
             sym,
