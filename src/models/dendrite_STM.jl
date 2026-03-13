@@ -26,7 +26,7 @@ dendritic_stp_network = let
             gl = 40nS,  # leak conductance
             R = nS / 40nS * GΩ,  # membrane resistance
             τm = 281pF / 40nS,  # membrane time constant
-            Er = -70.6mV,  # reset potential
+            El = -70.6mV,  # reset potential
             Vr = -55.6mV,  # resting potential
             Vt = -50.4mV,  # threshold potential
             ΔT = 2mV,  # slope factor
@@ -38,8 +38,8 @@ dendritic_stp_network = let
             up = 1ms,  # refractory period
             τabs = 2ms,  # absolute refractory period
         ),
-        dend_syn = Synapse(EyalGluDend, MilesGabaDend), # defines glutamaterbic and gabaergic receptors in the dendrites
-        soma_syn = Synapse(DuarteGluSoma, MilesGabaSoma),  # connect EyalGluDend to MilesGabaDend
+        dend_syn = Receptors(EyalGluDend, MilesGabaDend), # defines glutamaterbic and gabaergic receptors in the dendrites
+        soma_syn = Receptors(DuarteGluSoma, MilesGabaSoma),  # connect EyalGluDend to MilesGabaDend
     )
     PV = IFParameterGsyn(
         τm = 104.52pF / 9.75nS,

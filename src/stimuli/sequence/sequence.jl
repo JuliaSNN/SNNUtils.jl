@@ -71,34 +71,49 @@ function generate_sequence(
     @unpack dict, symbols, silence, ph_duration = lexicon
     ## create the populations
     ## sequence from the initial word sequence
-    sequence = Matrix{Any}(fill(silence, 6, seq_length+1))
-    sequence[1, 1] = silence
-    sequence[2, 1] = silence
-    sequence[3, 1] = ph_duration[silence]
-    for (n, (w, p)) in enumerate(zip(words, phonemes))
-        sequence[1, 1+n] = w
-        sequence[2, 1+n] = p
-        sequence[3, 1+n] = ph_duration[p]
-    end
+    word_line = 1
+    phoneme_line = 2
+    duration_line = 3
+    type_line = 4
+    onset_line = 5
+    offset_line = 6
+    max_word_length = 20
 
-    sequence[4, :] .= :mid
-    for n in axes(sequence, 2)[1:(end-2)]
-        if !(sequence[1, n+1] == sequence[1, n])
-            sequence[4, 1+n] = :onset
-        end
-        if !(sequence[1, n+1] == sequence[1, n+2])
-            sequence[4, 1+n] = :offset
-            j = 2
-            while !(sequence[4, n+1-j] == :onset)
-                sequence[4, 1+n-j] = Symbol("offset$j")
+    sequence = Matrix{Any}(fill(silence, 6, seq_length+2))
+    sequence[word_line, 1] = silence
+    sequence[phoneme_line, 1] = silence
+    sequence[duration_line, 1] = ph_duration[silence]
+    for (n, (w, p)) in enumerate(zip(words, phonemes))
+        sequence[word_line, 1+n] = w
+        sequence[phoneme_line, 1+n] = p
+        sequence[duration_line, 1+n] = ph_duration[p]
+    end
+    sequence[word_line, end] = silence
+    sequence[phoneme_line, end] = silence
+    sequence[duration_line, end] = ph_duration[silence]
+
+    sequence[type_line, :] .= :silence
+    n = 2
+    while n < size(sequence, 2)
+        word_offset = (sequence[word_line, n+1] !== sequence[word_line, n]) && (sequence[word_line, n] !== silence)
+        if word_offset
+            sequence[type_line, n] = :offset
+            j = 1
+            while sequence[word_line, n] == sequence[word_line, n-j]
+                sequence[type_line, n-j] = Symbol("offset_$(j+1)")
                 j += 1
             end
-            sequence
+            j -= 1
+            sequence[type_line, n-j] = :onset
         end
-        (sequence[1, n] == :_) && (sequence[4, n] = :silence)
+        if sequence[phoneme_line, n] == :_
+            sequence[type_line, n] = :silence
+        end
+        n += 1
     end
 
-    sequence[5, :] .= [0ms, cumsum(sequence[3, 2:end])...]
+
+    sequence[5, :] .= [0ms, cumsum(sequence[3, 1:end])[1:end-1]...]
     sequence[6, :] .= [cumsum(sequence[3, 1:end])...]
 
     line_id = (words = 1, phonemes = 2, duration = 3, type = 4, onset = 5, offset = 6)
@@ -122,6 +137,7 @@ Given a sign symbol and a sequence, this function identifies the line of the seq
 """
 function sign_intervals(sign::Symbol, sequence)
     @unpack dict, sequence, symbols, line_id = sequence
+
     ## Identify the line of the sequence that contains the sign
     sign_line_id = -1
     for k in keys(symbols)
@@ -136,9 +152,7 @@ function sign_intervals(sign::Symbol, sequence)
 
     ## Find the intervals where the sign is present
     intervals = Vector{Vector{Float32}}()
-    # cum_duration = cumsum(sequence[line_id.duration,:])
-    # _end = 1
-    # interval = [-1, -1]
+
     my_seq = sequence[sign_line_id, :]
     time_counter = 0
     for i in eachindex(my_seq)
@@ -169,11 +183,42 @@ function sign_intervals(sign::Symbol, sequence)
 end
 
 
+function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
+    merged_intervals = Vector{Vector{Float32}}()
+    all_intervals = length(intervals)
+
+    current_start = :new_item
+    current_end = nothing
+    i = 0 
+    while i < all_intervals
+        i+=1
+        local_start, local_end = intervals[i]
+        if current_start == :new_item
+            current_start = local_start
+            current_end = local_end
+            continue
+        end
+        ## if the current end is the same as the local start, we merge the intervals by updating the current end to the local end
+        if current_end == local_start
+            current_end = local_end
+        ## if the current end is different from the local start, we push the current interval to the merged intervals and start a new interval with the local start and local end
+        elseif i < all_intervals
+            push!(merged_intervals, [current_start, current_end])
+            current_start = local_start
+            current_end = local_end
+            # @info "Merged $(length(merged_intervals)) intervals: $current_start, $current_end at index $i"
+        end
+    end
+    # @info "Last interval: $current_start, $current_end"
+    push!(merged_intervals, [current_start, current_end])   
+    merged_intervals
+end
+
+
 function all_intervals(sym::Symbol, sequence; interval::Vector = [-50ms, 100ms])
     offsets = Vector{Vector{Float32}}()
     ys = Vector{Symbol}()
     symbols = getfield(sequence.symbols, sym)
-    @show symbols
     for word in symbols
         for myinterval in sign_intervals(word, sequence)
             offset = myinterval[end] .+ interval
@@ -258,8 +303,20 @@ Create a dictionary mapping each word in `words` to a vector of symbols represen
 # Returns
 A dictionary mapping each word to a vector of symbols representing its letters.
 """
-function getdictionary(words::Vector{T}) where {T<:Union{String,Symbol}}
-    Dict(Symbol(word) => [Symbol(letter) for letter in string(word)] for word in words)
+function getdictionary(words::Vector{T}, insert=nothing) where {T<:Union{String,Symbol}}
+    dict = Dict{Symbol,Vector{Symbol}}()
+    if !isnothing(insert)
+        for word in words
+            phonemes = vcat([[Symbol(x), Symbol(insert)] for x in collect(string(word))]...)[1:end-1]
+            push!(dict, Symbol(word) => phonemes)
+        end
+    else 
+        for word in words
+            phonemes = [Symbol(x) for x in collect(string(word))]
+            push!(dict, Symbol(word) => phonemes)
+        end
+    end
+    dict
 end
 
 """
@@ -279,6 +336,20 @@ function getphonemes(dictionary::Dict{Symbol,Vector{Symbol}})
     return phs
 end
 
+function getwords(dictionary::Dict{Symbol,Vector{Symbol}})
+    phs = collect(unique(vcat(keys(dictionary)...)))
+    push!(phs, :_)
+    return phs
+end
+
+
+function get_lexicon(words, duration, insert = nothing)
+    dictionary = getdictionary(words, insert)
+    duration = getduration(dictionary, duration)
+    config_lexicon = (ph_duration = duration, dictionary = dictionary)
+    return generate_lexicon(config_lexicon)
+end
+
 """
     getduration(dictionary::Dict{Symbol, Vector{Symbol}}, duration::R) where R <: Real
 
@@ -296,25 +367,25 @@ function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::R) where
     Dict(Symbol(phoneme) => Float32(duration) for phoneme in phonemes)
 end
 
-"""
-    symbolnames(seq)
-
-    Get the names of phonemes and words from the given sequence.
-    Words are prefixed with 'w_'.
-
-"""
-function symbolnames(seq)
-    phonemes = String[]
-    words = String[]
-    [push!(phonemes, string.(ph)) for ph in seq.symbols.phonemes]
-    [push!(words, "w_"*string(w)) for w in seq.symbols.words]
-    return (phonemes = phonemes, words = words)
+function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::NamedTuple)
+    dict = Dict{Symbol,Float32}()
+    phonemes = getphonemes(dictionary)
+    for phoneme in phonemes
+        if haskey(duration, Symbol(phoneme))
+            push!(dict, Symbol(phoneme) => getfield(duration, Symbol(phoneme)))
+        elseif phoneme == :_
+            push!(dict, Symbol(phoneme) => getfield(duration, :silence))
+        else
+             throw(ErrorException("Duration for phoneme $phoneme not found in duration NamedTuple"))
+        end
+    end
+    dict
 end
+
 
 function getneurons(stim, symbol, target = nothing)
     target = (target == :s) || isnothing(target) ? "" : "_$target"
     target = Symbol(string(symbol, target))
-    @show target
     return collect(Set(getfield(stim, target).neurons))
 end
 
@@ -327,6 +398,33 @@ function getstimsym(word, target)
     return Symbol(string(word)*target)
 end
 
+
+function stimuli_names(lexicon)
+    words = map(lexicon.symbols.words) do word
+         Symbol(string("w_", word))
+    end
+    phonemes = map(lexicon.symbols.phonemes) do phoneme
+         Symbol(string("p_", phoneme))
+    end
+    return (;words, phonemes, all=vcat(words, phonemes))
+end
+
+"""
+    symbolnames(seq)
+
+    Get the names of phonemes and words from the given sequence.
+    Words are prefixed with 'w_'.
+
+"""
+function symbol_names(seq)
+    phonemes = Symbol[]
+    words = Symbol[]
+    [push!(phonemes, ph) for ph in seq.symbols.phonemes]
+    [push!(words, w) for w in seq.symbols.words]
+    return (phonemes = phonemes, words = words, all = vcat(words, phonemes))
+end
+
+
 export getstim, getstimsym
 
 export generate_sequence,
@@ -338,10 +436,13 @@ export generate_sequence,
     getdictionary,
     getduration,
     getphonemes,
-    symbolnames,
+    symbol_names,
+    get_lexicon,
     getneurons,
     all_intervals,
-    generate_balanced_sequence
+    stimuli_names,
+    generate_balanced_sequence,
+    merge_intervals
 
 
 function generate_balanced_sequence(sounds, sequence_length)
@@ -360,3 +461,4 @@ function generate_balanced_sequence(sounds, sequence_length)
 
     return shuffled_sequence
 end
+
