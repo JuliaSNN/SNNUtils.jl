@@ -1,6 +1,6 @@
 
 #############################################################
-###########       Synapse parameters        #################
+###########       Receptors parameters        #################
 #############################################################
 
 ## Synapses used in Tripod neuron model
@@ -50,8 +50,8 @@ DuarteGluSoma = Glutamatergic(
 
 quaresima2022 = (
     dends = [(150um, 400um), (150um, 400um)],
-    soma_syn = Synapse(DuarteGluSoma, MilesGabaSoma), # defines glutamaterbic and gabaergic receptors in the soma
-    dend_syn = Synapse(EyalGluDend, MilesGabaDend), # defines glutamaterbic and gabaergic receptors in the dendrites
+    soma_syn = Receptors(DuarteGluSoma, MilesGabaSoma), # defines glutamaterbic and gabaergic receptors in the soma
+    dend_syn = Receptors(EyalGluDend, MilesGabaDend), # defines glutamaterbic and gabaergic receptors in the dendrites
     NMDA = EyalNMDA, # NMDA synapse
 )
 
