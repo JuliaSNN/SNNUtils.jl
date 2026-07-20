@@ -1,6 +1,6 @@
 name = "SNNUtils"
 uuid = "df079cdf-2344-43fe-90b5-fc41d8d26db7"
-version = "0.2.7"
+version = "0.2.8"
 authors = ["alequa <alessio.quaresima@pasteur.fr>"]
 
 [deps]
@@ -70,4 +70,4 @@ Statistics = "1.11"
 StatsBase = "0.34"
 Tables = "1.12.1"
 ThreadTools = "0.2"
-julia = "1.10"
+julia = "1.12"
