@@ -16,7 +16,7 @@ MultinomialClassifier = MLJ.@load MultinomialClassifier pkg=MLJLinearModels
 
 """
     SVCtrain(Xs, ys; seed=123, p=0.5)
-    
+
     Train a Support Vector Classifier with a linear kernel on the data Xs and labels ys. The ratio of samples used for training is determined by p. If p < 1, the data is split into training and test sets; otherwise, all data is used for training and testing.
 
     # Arguments
@@ -24,7 +24,9 @@ MultinomialClassifier = MLJ.@load MultinomialClassifier pkg=MLJLinearModels
     - `ys::Vector{Int64}`: The labels.
 
     # Returns
-    The accuracy of the classifier on the test set.
+    A tuple `(score, confusion_matrix)`: `score` is Cohen's kappa of the classifier
+    on the test set (not raw accuracy), and `confusion_matrix` is the corresponding
+    confusion matrix.
 
 
 """
