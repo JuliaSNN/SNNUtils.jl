@@ -133,8 +133,8 @@ dimension). Returns `(spatial_code, labels)`: `labels = sort(unique(sequence))` 
 `spatial_code`, a `Float32` array with the trial dimension removed and a new last dimension of
 length `length(labels)` holding the mean over the trials of each label.
 
-The average is computed along the last dimension of the selected slices, so a `dim` other than
-the last one does not average over trials correctly.
+Any `dim` works. (Up to SNNUtils 0.2.9 the mean was taken along the last dimension of the
+selected slices, which is wrong when `dim` is not the last dimension.)
 
 # Example
 ```julia
@@ -153,8 +153,10 @@ function trial_average(array::Array, sequence::Vector, dim::Int = -1)
     for i in eachindex(labels)
         sound = labels[i]
         sound_ids = findall(==(sound), sequence)
-        selectdim(spatial_code, ave_dim, i) .=
-            mean(selectdim(array, trial_dim, sound_ids), dims = ave_dim)
+        selectdim(spatial_code, ave_dim, i) .= dropdims(
+            mean(selectdim(array, trial_dim, sound_ids), dims = trial_dim),
+            dims = trial_dim,
+        )
     end
     return spatial_code, labels
 end
@@ -228,18 +230,17 @@ Mean of the recorded variable `sym` of every neuron of `pop` in each window
 end after the last recorded time are skipped (their column stays zero). Returns a
 `Matrix{Float64}` of size `(pop.N, length(offsets))`.
 
-Note: the function calls `SNN.record`, but `SNN` is not defined inside SNNUtils, so it throws an
-`UndefVarError` in SNNUtils 0.2.9.
+(Up to SNNUtils 0.2.9 it called `SNN.record`, undefined inside SNNUtils, and always threw.)
 """
 function sym_features(sym::Symbol, pop::T, offsets::Vector) where {T<:AbstractPopulation}
     N = pop.N
     X = zeros(N, length(offsets))
-    var, r_v = SNN.record(pop, sym, range = true)
+    var, r_v = SNNModels.record(pop, sym, range = true)
     Threads.@threads for i in eachindex(offsets)
         offset = offsets[i]
         offset[end] > r_v[end] && continue
         range = offset[1]:1ms:offset[2]
-        X[:, i] = mean(var[:, range], dims = 2)[:, 1]
+        X[:, i] = mean(var(axes(var, 1), range), dims = 2)[:, 1]
     end
     return X
 end
@@ -269,8 +270,8 @@ of `model.pop[pop]` are counted in 10 ms bins over the window `offset_time .+ (0
   presentations of `j`.
 - Without `delay`: `(scores, best_delay, (; cms, delays))`.
 
-The computation is serial (the lock in the code has no effect), and `activity_matrix` is not
-reset between delays.
+The computation is serial. `activity_matrix` is computed for the given `delay`. (Up to SNNUtils
+0.2.9 it accumulated over all the delays tested.)
 """
 function score_spikes(model, seq, target_interval = :offset; delay = nothing, pop = :Exc)
     ## Get word intervals 
@@ -296,7 +297,6 @@ function score_spikes(model, seq, target_interval = :offset; delay = nothing, po
     word_count = [count(x->x==word, words) for word in word_list]
     assemblies = [word_assemblies[word] for word in word_list]
 
-    my_lock = Threads.SpinLock()
     confusion_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
     activity_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
     _spikes = spiketimes(model.pop[pop])
@@ -305,6 +305,7 @@ function score_spikes(model, seq, target_interval = :offset; delay = nothing, po
     function _score(delay, test_interval = 0:100)
         predicted = Symbol[]
         target = Symbol[]
+        fill!(activity_matrix, 0.0f0)
         @inbounds @fastmath for i in eachindex(offsets_ids)
             target_word = findfirst(word_list .== words[i])
             target_interval = offset_times[i] .+ test_interval .+ delay
@@ -314,7 +315,6 @@ function score_spikes(model, seq, target_interval = :offset; delay = nothing, po
             )
             _spikes = sum(spike_count[:, r_idx], dims = 2)[:, 1]
 
-            lock(my_lock)
             for word in eachindex(word_list)
                 activity_matrix[word, target_word] +=
                     mean(_spikes[assemblies[word]]) / word_count[target_word]
@@ -324,7 +324,6 @@ function score_spikes(model, seq, target_interval = :offset; delay = nothing, po
                 word_list[argmax(mean.([_spikes[assembly] for assembly in assemblies]))],
             )
             push!(target, word_list[target_word])
-            unlock(my_lock)
         end
         confusion_matrix = confmat(target, predicted)
         score = kappa(confusion_matrix)
@@ -353,12 +352,13 @@ end
     MultinomialLogisticRegression(X::Matrix{Float64}, labels::Array{Int64}; λ = 0.5, test_ratio = 0.5)
 
 Multinomial logistic regression (MLJLinearModels `MultinomialRegression(λ)`, no intercept) of
-`labels` on the features `X` (`(n_features, n_samples)`), with z-scoring based on the training
-set (applied in place to `X`) and `NaN` replaced by 0. Intended to return
-`(accuracy, params)` with `params` of size `(n_features, n_classes)`.
+`labels` on the features `X` (`(n_features, n_samples)`), with z-scoring based on a random
+training set (a fraction `1 - test_ratio` of the samples, drawn with the global RNG) and `NaN`
+replaced by 0. Returns `(accuracy, params)`: the accuracy on the test samples and `params` of
+size `(n_features, n_classes)`. `X` is not modified.
 
-Note: it calls `make_set_index`, which is not defined in SNNUtils 0.2.9, so it always throws an
-`UndefVarError`. Use [`SVCtrain`](@ref) or `SNNUtils.LogRegtrain` instead.
+(Up to SNNUtils 0.2.9 it called the undefined `make_set_index` and always threw; it also
+z-scored `X` in place and printed with `@show`.)
 """
 function MultinomialLogisticRegression(
     X::Matrix{Float64},
@@ -370,10 +370,9 @@ function MultinomialLogisticRegression(
     y, mapping = symbols_to_int(Symbol.(labels))
     n_features = size(X, 1)
 
-    train, test = make_set_index(length(y), test_ratio)
-    @show length(test) + length(train)
-    @show length(train)
+    train, test = _make_set_index(length(y), test_ratio)
 
+    X = copy(X)
     train_std = StatsBase.fit(ZScoreTransform, X[:, train], dims = 2)
     StatsBase.transform!(train_std, X)
     intercept = false
@@ -392,6 +391,13 @@ function MultinomialLogisticRegression(
     scores = mean(targets .== y[test])
     params = reshape(θ, n_features + Int(intercept), n_classes)
     return scores, params
+end
+
+# Random split of `1:n` into training and test indices (`test_ratio` of the samples in the test set).
+function _make_set_index(n::Int, test_ratio)
+    perm = randperm(n)
+    n_test = clamp(round(Int, test_ratio * n), 1, n - 1)
+    return sort(perm[(n_test+1):end]), sort(perm[1:n_test])
 end
 
 """
@@ -444,12 +450,10 @@ function do_pca(data::Matrix)
     return MultivariateStats.transform(pca_result, data)
 end
 
-# `pca` is exported but not defined in SNNUtils 0.2.9.
 export SVCtrain,
     spikecount_features,
     sym_features,
     score_spikes,
-    pca,
     MultinomialLogisticRegression,
     symbols_to_int,
     standardize,
