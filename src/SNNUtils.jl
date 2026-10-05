@@ -1,3 +1,21 @@
+"""
+    SNNUtils
+
+Protocols and analysis tools built on SNNModels:
+
+- word/phoneme sequences and the Poisson stimuli that present them
+  ([`get_lexicon`](@ref), [`generate_sequence`](@ref), [`word_phonemes_sequence`](@ref),
+  [`step_input`](@ref), [`update_stimuli!`](@ref), ...);
+- excitation/inhibition balance of dendritic neurons ([`compute_kei`](@ref));
+- import of BioSeq tasks ([`import_bioseq_tasks`](@ref), [`seq_bioseq`](@ref));
+- short-term-plasticity parameters sampled from experimental fits
+  ([`sample_stp_params`](@ref), [`sample_stp_campagnola`](@ref));
+- weight and decoding analysis ([`average_weight_dynamics`](@ref), [`SVCtrain`](@ref),
+  [`score_spikes`](@ref), [`trial_average`](@ref), ...).
+
+The parameter collections in `src/models/` other than `stp_het.jl` are not loaded by the
+package; see the "SNNUtils models" page of the documentation.
+"""
 module SNNUtils
 
 using SNNModels

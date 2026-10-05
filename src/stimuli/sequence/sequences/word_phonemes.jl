@@ -1,20 +1,39 @@
 """
-    generate_random_word_sequence(sequence_length, dictionary, silence_symbol; silent_intervals=1, weights=nothing)
+    word_phonemes_sequence(; lexicon, weights = nothing, mode = :fixed, seed = nothing,
+                           silent_intervals = 1, presentations, kwargs...)
 
-Generate a random word sequence of a given length using a dictionary of words and their corresponding phonemes.
+Sequence generator for [`generate_sequence`](@ref): draw `presentations` words from
+`lexicon.dict` and expand each into its phonemes, followed by `silent_intervals` silence elements.
 
-# Arguments
-- `sequence_length::Int`: The desired length of the word sequence.
-- `dictionary::Dict{Symbol, Vector{Symbol}}`: A dictionary mapping words to their corresponding phonemes.
-- `silence_symbol::Symbol`: The symbol representing silence in the word sequence.
+Modes:
+- `:fixed`: every word `w` in `weights` (a `Dict` word => weight) is presented
+  `floor(Int, weights[w] * presentations / sum(values(weights)))` times, plus one extra
+  presentation for the words with the largest remainders until the total is `presentations`,
+  in random order.
+- `:random`: words are sampled independently with probabilities proportional to `weights[w]`
+  (0 for words not in `weights`).
+- `:balanced`: words are sampled with weights `exp(-count(w))`, favouring words presented less
+  often; `weights` is ignored.
 
-# Optional Arguments
-- `silent_intervals::Int = 1`: The number of silent intervals between words.
-- `weights::Union{Nothing, Vector{Float64}} = nothing`: The weights assigned to each word in the dictionary. If `nothing`, all words have equal weight.
+`weights = nothing` means equal weights for all the words of the lexicon. If `seed !== nothing`,
+`Random.seed!(seed)` is called. One final silence element is appended. The word counts are
+logged at debug level.
+
+(Up to SNNUtils 0.2.9 `:fixed` failed with `pop!` on an empty list when the rounded counts summed
+to less than `presentations`, `weights = nothing` failed for `:fixed`/`:random`, and the function
+printed with `@show`.)
 
 # Returns
-- `words::Vector{Symbol}`: The generated word sequence.
-- `phonemes::Vector{Symbol}`: The corresponding phonemes for each word in the sequence.
+`(words, phonemes, seq_length)`: the word of each element, the phoneme of each element, and
+their common length.
+
+# Example
+```julia
+using SpikingNeuralNetworks, SNNUtils
+SNN.@load_units
+lexicon = get_lexicon([:AB, :BA], 50ms)
+words, phonemes, L = word_phonemes_sequence(; lexicon, presentations = 4, mode = :balanced)
+```
 """
 function word_phonemes_sequence(;
     lexicon,
@@ -34,10 +53,10 @@ function word_phonemes_sequence(;
     end
 
     lexicon_words = collect(keys(dict))
+    weights = isnothing(weights) ? Dict(word => 1.0 for word in lexicon_words) : weights
 
     word_count = Dict(word => 0 for word in lexicon_words)
     weight_list = nothing
-    @show mode
     if  mode == :balanced
         weight_list = map(lexicon_words) do word
                         exp(-1/word_count[word])
@@ -49,8 +68,14 @@ function word_phonemes_sequence(;
     elseif mode == :fixed
         total_weight = sum(values(weights))
         word_list = []
-        for (word, weight) in pairs(weights)
-            count = floor(Int, weight * presentations / total_weight)
+        wkeys = collect(keys(weights))
+        exact = [weights[w] * presentations / total_weight for w in wkeys]
+        counts = floor.(Int, exact)
+        # distribute the remaining presentations to the largest remainders
+        for k in sortperm(exact .- counts, rev = true)[1:(presentations-sum(counts))]
+            counts[k] += 1
+        end
+        for (word, count) in zip(wkeys, counts)
             append!(word_list, fill(word, count))
         end
         shuffle!(word_list)
@@ -82,7 +107,7 @@ function word_phonemes_sequence(;
     push!(words, silence)
     push!(phonemes, silence)
     seq_length = length(words)
-    @show word_count
+    @debug "word counts" word_count
 
     return words, phonemes, seq_length
 end

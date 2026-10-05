@@ -3,20 +3,28 @@ using StatsBase
 """
     generate_lexicon(config)
 
-Generate a lexicon based on the given configuration.
+Build a lexicon from a word-to-phoneme dictionary.
 
 # Arguments
-- `config`: A dictionary containing the configuration parameters.
-    - `ph_duration`: The duration of each phoneme.
-    - `dictionary`: A dictionary mapping words to phonemes.
+- `config`: any object with the fields (or keys accessible with `@unpack`)
+    - `dictionary::Dict{Symbol,Vector{Symbol}}`: word => its sequence of phonemes;
+    - `ph_duration`: duration of each phoneme in ms, normally a `Dict{Symbol,Float32}` that
+      also contains the silence symbol `:_` (see [`getduration`](@ref)).
 
 # Returns
-A named tuple containing the following fields:
-- `dict`: The input dictionary.
-- `symbols`: A tuple containing the phonemes and words.
-- `ph_duration`: The duration of each phoneme.
-- `silence_symbol`: The symbol representing silence.
+A `NamedTuple` with fields
+- `dict`: the input dictionary;
+- `symbols = (phonemes, words)`: sorted vectors of the unique phonemes and words (the silence
+  symbol is not included);
+- `ph_duration`: the input durations;
+- `silence = :_`: the silence symbol.
 
+# Example
+```julia
+using SNNUtils
+dictionary = getdictionary([:AB, :BA])
+lexicon = generate_lexicon((ph_duration = getduration(dictionary, 50.0), dictionary = dictionary))
+```
 """
 function generate_lexicon(config)
     @unpack ph_duration, dictionary = config
@@ -43,20 +51,38 @@ function generate_lexicon(config)
 end
 
 """
-    generate_sequence(lexicon, config, seed=nothing)
+    generate_sequence(seq_function::Function; lexicon::NamedTuple, seed = -1, kwargs...)
 
-Generate a sequence of words and phonemes based on the provided lexicon and configuration.
+Generate a timed sequence of words and phonemes.
 
-# Arguments
-- `lexicon`: A dictionary containing the lexicon information.
-    - `dict`: A dictionary mapping words and phonemes to their corresponding IDs.
-    - `symbols`: A list of symbols in the lexicon.
-    - `silence_symbol`: The symbol representing silence.
-    - `ph_duration`: A dictionary mapping phonemes to their corresponding durations.
+`seq_function(; lexicon, kwargs...)` must return `(words, phonemes, seq_length)`: two vectors of
+equal length with the word and the phoneme of every sequence element, and their length
+([`word_phonemes_sequence`](@ref) is the generator provided by SNNUtils). If `seed > 0` the
+global RNG is seeded with `Random.seed!(seed)` first.
+
+The sequence is stored as a `6 x (seq_length + 2)` `Matrix{Any}`, with a silence element added at
+the beginning and at the end. Rows (see `line_id`):
+1. `words`: word symbol of each element (`:_` for silence);
+2. `phonemes`: phoneme symbol;
+3. `duration`: duration in ms, `lexicon.ph_duration[phoneme]`;
+4. `type`: `:onset` for the first phoneme of a word, `:offset` for the last one, `:offset_j`
+   for the intermediate ones of longer words (counted backwards from the end), `:silence`;
+5. `onset`: start time (ms) of the element;
+6. `offset`: end time (ms) of the element.
 
 # Returns
-A named tuple containing the lexicon information and the generated sequence.
+The lexicon `NamedTuple` extended with `sequence` (the matrix above) and
+`line_id = (words = 1, phonemes = 2, duration = 3, type = 4, onset = 5, offset = 6)`.
 
+# Example
+```julia
+using SpikingNeuralNetworks, SNNUtils
+SNN.@load_units
+lexicon = get_lexicon([:AB, :BA, :CC], 50ms)
+seq = generate_sequence(word_phonemes_sequence; lexicon, presentations = 6, mode = :fixed,
+                        weights = Dict(:AB => 1.0, :BA => 1.0, :CC => 1.0), seed = 1)
+seq.sequence[seq.line_id.words, :]
+```
 """
 function generate_sequence(
     seq_function::Function;
@@ -124,16 +150,26 @@ end
 """
     sign_intervals(sign::Symbol, sequence)
 
-Given a sign symbol and a sequence, this function identifies the line of the sequence that contains the sign and finds the intervals where the sign is present. The intervals are returned as a vector of vectors, where each inner vector represents an interval and contains two elements: the start time and the end time of the interval.
+Return the time intervals during which the word or phoneme `sign` is presented in `sequence`.
 
-# Arguments
-- `sign::Symbol`: The sign symbol to search for in the sequence.
-- `sequence`: The sequence object containing the sign and other information.
+The row of the sequence is selected by looking `sign` up in `sequence.symbols` (`words` or
+`phonemes`). Each sequence element equal to `sign` contributes one interval
+`[t_start, t_end]` (ms); consecutive elements are not merged, so a two-phoneme word yields two
+adjacent intervals per presentation (see [`merge_intervals`](@ref)). Throws an error if `sign` is
+neither a word nor a phoneme of the lexicon.
 
 # Returns
-- `intervals`: A vector of vectors representing the intervals where the sign is present in the sequence.
+`Vector{Vector{Float32}}` of `[start, end]` intervals in ms.
 
 # Example
+```julia
+using SpikingNeuralNetworks, SNNUtils
+SNN.@load_units
+lexicon = get_lexicon([:AB, :BA], 50ms)
+seq = generate_sequence(word_phonemes_sequence; lexicon, presentations = 4, mode = :fixed,
+                        weights = Dict(:AB => 1.0, :BA => 1.0))
+sign_intervals(:AB, seq)
+```
 """
 function sign_intervals(sign::Symbol, sequence)
     @unpack dict, sequence, symbols, line_id = sequence
@@ -183,9 +219,25 @@ function sign_intervals(sign::Symbol, sequence)
 end
 
 
+"""
+    merge_intervals(intervals::Vector{Vector{Float32}}, skip = nothing)
+
+Merge consecutive intervals that touch (`end` of one equal to `start` of the next) into a single
+interval. `skip` is unused.
+
+`merge_intervals([[0, 1], [3, 4], [5, 6]])` returns the three intervals. (Up to SNNUtils 0.2.9
+the last interval was dropped when it did not touch the previous one.)
+
+# Example
+```julia
+using SNNUtils
+merge_intervals([[0f0, 1f0], [1f0, 2f0]])   # [[0.0, 2.0]]
+```
+"""
 function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
     merged_intervals = Vector{Vector{Float32}}()
     all_intervals = length(intervals)
+    all_intervals == 0 && return merged_intervals
 
     current_start = :new_item
     current_end = nothing
@@ -202,7 +254,7 @@ function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
         if current_end == local_start
             current_end = local_end
         ## if the current end is different from the local start, we push the current interval to the merged intervals and start a new interval with the local start and local end
-        elseif i < all_intervals
+        else
             push!(merged_intervals, [current_start, current_end])
             current_start = local_start
             current_end = local_end
@@ -215,6 +267,17 @@ function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
 end
 
 
+"""
+    all_intervals(sym::Symbol, sequence; interval::Vector = [-50ms, 100ms])
+
+For every symbol of the class `sym` (`:words` or `:phonemes`) and every interval returned by
+[`sign_intervals`](@ref), return the window `interval_end .+ interval` (ms) around the end of the
+interval, together with the symbol.
+
+# Returns
+`(offsets, ys)`: a `Vector{Vector{Float32}}` of windows and the `Vector{Symbol}` of the
+corresponding symbols, grouped by symbol.
+"""
 function all_intervals(sym::Symbol, sequence; interval::Vector = [-50ms, 100ms])
     offsets = Vector{Vector{Float32}}()
     ys = Vector{Symbol}()
@@ -234,14 +297,8 @@ end
 """
     sequence_end(seq)
 
-Return the end of the sequence.
-
-# Arguments
-- `seq`: A sequence object containing `line_id` and `sequence` fields.
-
-# Returns
-- The sum of the values in the `sequence` array at the `line_id.duration` index.
-
+Return the total duration of the sequence in ms, i.e. the sum of the `duration` row of
+`seq.sequence`.
 """
 function sequence_end(seq)
     @unpack line_id, sequence = seq
@@ -249,17 +306,10 @@ function sequence_end(seq)
 end
 
 """
-    time_in_interval(x, intervals)
+    time_in_interval(x::Float32, intervals::Vector{Vector{Float32}})
 
-Return true if the time `x` is in any of the intervals.
-
-# Arguments
-- `x`: A Float32 value representing the time.
-- `intervals`: A vector of vectors, where each inner vector represents an interval with two Float32 values.
-
-# Returns
-- `true` if `x` is in any of the intervals, `false` otherwise.
-
+Return `true` if `interval[1] <= x <= interval[2]` for at least one interval (bounds included),
+`false` otherwise.
 """
 function time_in_interval(x::Float32, intervals::Vector{Vector{Float32}})
     for interval in intervals
@@ -271,17 +321,10 @@ function time_in_interval(x::Float32, intervals::Vector{Vector{Float32}})
 end
 
 """
-    start_interval(x, intervals)
+    start_interval(x::Float32, intervals::Vector{Vector{Float32}})
 
-Return the start of the interval that contains the time `x`.
-
-# Arguments
-- `x`: A Float32 value representing the time.
-- `intervals`: A vector of vectors, where each inner vector represents an interval with two Float32 values.
-
-# Returns
-- The start of the interval that contains `x`, or -1 if `x` is not in any of the intervals.
-
+Return the start of the first interval that contains `x` (bounds included), or `-1` if `x` is in
+none of the intervals.
 """
 function start_interval(x::Float32, intervals::Vector{Vector{Float32}})
     for interval in intervals
@@ -293,15 +336,17 @@ function start_interval(x::Float32, intervals::Vector{Vector{Float32}})
 end
 
 """
-    getdictionary(words::Vector{Union{String, Symbol}})
+    getdictionary(words::Vector{T}, insert = nothing) where {T<:Union{String,Symbol}}
 
-Create a dictionary mapping each word in `words` to a vector of symbols representing its letters.
+Create a `Dict{Symbol,Vector{Symbol}}` mapping each word to the vector of its characters, used as
+phonemes. If `insert` is given, `Symbol(insert)` is placed between consecutive characters
+(e.g. `getdictionary(["ab"], :_)` gives `:ab => [:a, :_, :b]`).
 
-# Arguments
-- `words`: A vector of strings or symbols representing the words.
-
-# Returns
-A dictionary mapping each word to a vector of symbols representing its letters.
+# Example
+```julia
+using SNNUtils
+getdictionary([:AB, :CD])   # Dict(:AB => [:A, :B], :CD => [:C, :D])
+```
 """
 function getdictionary(words::Vector{T}, insert=nothing) where {T<:Union{String,Symbol}}
     dict = Dict{Symbol,Vector{Symbol}}()
@@ -320,15 +365,9 @@ function getdictionary(words::Vector{T}, insert=nothing) where {T<:Union{String,
 end
 
 """
-    getphonemes(dictionary::Dict{Symbol, Vector{Symbol}})
+    getphonemes(dictionary::Dict{Symbol,Vector{Symbol}})
 
-Get a vector of symbols representing all the unique phonemes in the given `dictionary`.
-
-# Arguments
-- `dictionary`: A dictionary mapping words to vectors of symbols representing their letters.
-
-# Returns
-A vector of symbols representing all the unique phonemes in the given `dictionary`.
+Return the unique phonemes occurring in `dictionary`, followed by the silence symbol `:_`.
 """
 function getphonemes(dictionary::Dict{Symbol,Vector{Symbol}})
     phs = collect(unique(vcat(values(dictionary)...)))
@@ -343,6 +382,23 @@ function getwords(dictionary::Dict{Symbol,Vector{Symbol}})
 end
 
 
+"""
+    get_lexicon(words, duration, insert = nothing)
+
+Convenience constructor of a lexicon: `getdictionary(words, insert)`, then
+`getduration(dictionary, duration)`, then [`generate_lexicon`](@ref).
+
+`duration` is either a number (the same duration, in ms, for every phoneme and for silence) or a
+`NamedTuple` with one entry per phoneme plus `silence` (see [`getduration`](@ref)).
+
+# Example
+```julia
+using SpikingNeuralNetworks, SNNUtils
+SNN.@load_units
+lexicon = get_lexicon([:AB, :BA, :CC], 50ms)
+lexicon.symbols   # (phonemes = [:A, :B, :C], words = [:AB, :BA, :CC])
+```
+"""
 function get_lexicon(words, duration, insert = nothing)
     dictionary = getdictionary(words, insert)
     duration = getduration(dictionary, duration)
@@ -351,16 +407,15 @@ function get_lexicon(words, duration, insert = nothing)
 end
 
 """
-    getduration(dictionary::Dict{Symbol, Vector{Symbol}}, duration::R) where R <: Real
+    getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::Real)
+    getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::NamedTuple)
 
-Create a dictionary mapping each phoneme in the given `dictionary` to the specified `duration`.
+Return a `Dict{Symbol,Float32}` with the duration (ms) of every phoneme of `dictionary` and of
+the silence symbol `:_`.
 
-# Arguments
-- `dictionary`: A dictionary mapping words to vectors of symbols representing their letters.
-- `duration`: The duration to assign to each phoneme.
-
-# Returns
-A dictionary mapping each phoneme to the specified `duration`.
+With a number, every phoneme (and silence) gets `Float32(duration)`. With a `NamedTuple`, each
+phoneme `ph` gets `duration[ph]` and the silence gets `duration.silence`; an error is thrown if a
+phoneme is missing.
 """
 function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::R) where {R<:Real}
     phonemes = getphonemes(dictionary)
@@ -383,22 +438,55 @@ function getduration(dictionary::Dict{Symbol,Vector{Symbol}}, duration::NamedTup
 end
 
 
+"""
+    getneurons(stim, symbol, target = nothing)
+
+Return the unique indices of the neurons targeted by the stimulus `stim[Symbol(symbol, "_", target)]`
+(or `stim[symbol]` when `target` is `nothing` or `:s`).
+"""
 function getneurons(stim, symbol, target = nothing)
     target = (target == :s) || isnothing(target) ? "" : "_$target"
     target = Symbol(string(symbol, target))
     return collect(Set(getfield(stim, target).neurons))
 end
 
+"""
+    getstim(stim, word, target)
+
+Return the field [`getstimsym`](@ref)`(word, target)` of the stimulus collection `stim`.
+"""
 function getstim(stim, word, target)
     return getfield(stim, getstimsym(word, target))
 end
 
+"""
+    getstimsym(word, target)
+
+Return the stimulus name `Symbol(word, "_", target)`, or `Symbol(word)` when `target` is
+`nothing` or `:s` (soma).
+"""
 function getstimsym(word, target)
     target = (target == :s) || isnothing(target) ? "" : "_$target"
     return Symbol(string(word)*target)
 end
 
 
+"""
+    stimuli_names(lexicon)
+
+Return the stimulus names used by [`step_input`](@ref), [`set_stimuli!`](@ref) and
+[`update_stimuli!`](@ref): words prefixed with `w_`, phonemes prefixed with `p_`.
+
+# Returns
+`(words, phonemes, all)`, where `all = vcat(words, phonemes)`.
+
+# Example
+```julia
+using SpikingNeuralNetworks, SNNUtils
+SNN.@load_units
+stimuli_names(get_lexicon([:AB], 50ms))  # (words = [:w_AB], phonemes = [:p_A, :p_B], all = ...)
+```
+"""
 function stimuli_names(lexicon)
     words = map(lexicon.symbols.words) do word
          Symbol(string("w_", word))
@@ -410,11 +498,11 @@ function stimuli_names(lexicon)
 end
 
 """
-    symbolnames(seq)
+    symbol_names(seq)
 
-    Get the names of phonemes and words from the given sequence.
-    Words are prefixed with 'w_'.
-
+Return the phoneme and word symbols of a lexicon or sequence, without prefixes, as
+`(phonemes, words, all)` with `all = vcat(words, phonemes)`. (Use [`stimuli_names`](@ref) for the
+`w_`/`p_`-prefixed stimulus names.)
 """
 function symbol_names(seq)
     phonemes = Symbol[]
@@ -445,6 +533,13 @@ export generate_sequence,
     merge_intervals
 
 
+"""
+    generate_balanced_sequence(sounds, sequence_length)
+
+Return a shuffled vector of length `sequence_length` in which every element of `sounds` appears
+`sequence_length ÷ length(sounds)` times, plus the first `sequence_length % length(sounds)`
+sounds once more.
+"""
 function generate_balanced_sequence(sounds, sequence_length)
     num_sounds = length(sounds)
     target_count = sequence_length ÷ num_sounds

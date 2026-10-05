@@ -1,3 +1,6 @@
+# Not loaded by SNNUtils. Plasticity and connectivity parameters; works when included (SNNModels
+# after 1.8.4 accepts a Distributions type such as `Normal` as `dist` in `conn`; 1.8.4 needed a
+# Symbol). The undefined `ballstick_network` is no longer exported.
 quaresima2023 = (
     plasticity = (
         iSTDP_rate = iSTDPRate(η = 0.2, τy = 5ms, r = 10Hz, Wmax = 243.4pF, Wmin = 0.1pF),
@@ -32,4 +35,4 @@ quaresima2023 = (
         Is_to_Is = (p = 0.2, μ = log(16.2), dist = LogNormal, σ = 0.0),
     ),
 )
-export quaresima2023, ballstick_network
+export quaresima2023

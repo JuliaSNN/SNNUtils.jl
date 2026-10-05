@@ -1,3 +1,5 @@
+# Not loaded by SNNUtils 0.2.9. Uses `IFParameterGsyn` and `AdExParameterGsyn`, which do not exist
+# in SNNModels 1.8.4: including the file fails.
 # Duarte2019 model parameters without NMDA and GABA_B synapses
 duarte2019 = (
     PV = IFParameterGsyn(
