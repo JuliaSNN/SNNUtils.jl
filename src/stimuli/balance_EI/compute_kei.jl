@@ -1,84 +1,63 @@
 @doc raw"""
     get_model(L, NAR, Nd; Vs = -55)
 
-Build a single dendritic neuron (two dendrites of length `L`, via `Tripod`; if that fails, a
-`Multipod` with `Nd` dendrites) with fixed AdEx-like somatic parameters
+Passive properties of a dendritic neuron with dendrites of length `L` (human dendritic
+physiology, `create_dendrite(L)`), the fixed AdEx-like somatic parameters of the Tripod model
 (``C = 281`` pF, ``g_L = 40`` nS, ``E_L = V_r = -70.6`` mV, ``a = 4`` nS, ``b = 80.5`` pA,
-``\tau_w = 144`` ms, spike threshold disabled with ``V_t = 1000`` mV) and Eyal NMDA kinetics,
-and return its passive properties.
+``\tau_w = 144`` ms) and dendritic receptors with NMDA/AMPA ratio `NAR`
+(`EyalEquivalentNAR`: AMPA ``g_0 = 0.73(1 + 1.31/0.73 - NAR)`` nS, NMDA ``g_0 = 0.73\,NAR`` nS
+with ``\tau_d = 35`` ms, and the `MilesGabaDend` GABA receptors).
 
 # Arguments
 - `L`: dendritic length (library length unit, e.g. `200um`).
-- `NAR`: NMDA/AMPA ratio passed to `EyalEquivalentNAR`.
-- `Nd`: number of dendrites (used by the `Multipod` fallback and returned).
+- `NAR`: NMDA/AMPA ratio.
+- `Nd`: number of dendrites (returned; used by `residual_current` and `compute_kei`).
 - `Vs = -55`: target somatic potential (mV), returned unchanged.
 
 # Returns
 A `Dict{Symbol,Any}` (from `@symdict`) with `gax` (axial conductance), `gm` (dendritic membrane
-conductance), `gl`, `a`, `Vs`, `Vr`, `C`, `dend_syn` (dendritic receptors from
-`EyalEquivalentNAR(NAR)`), `Nd`.
+conductance), `gl`, `a`, `Vs`, `Vr`, `C`, `dend_syn` (vector of the four dendritic `Receptor`s,
+AMPA, NMDA, GABAa, GABAb), `Nd`.
 
-# Status
-Does not run with SNNModels 1.8.4: `get_model` calls `PostSpike(A = 10.0, τA = 30.0)`, whose
-keyword `A` does not exist (nor do the `C`, `gl`, ... keywords passed to `DendNeuronParameter`) (the error is caught, but the fallback branch calls `PostSpike` in the
-same way and would then need the undefined `AdExSoma`/`Multipod`); it also needs `EyalEquivalentNAR` (defined only in the unloaded file
-`models/quaresima_2024_updown.jl`) and `synapsearray` (exported but not defined by SNNModels).
+!!! note "Changed after SNNUtils 0.2.9"
+    Up to 0.2.9 `get_model` (and therefore `residual_current`, `compute_kei`, `optimal_kei`)
+    always threw: it used keywords and types removed from SNNModels (`PostSpike(A = ...)`,
+    `DendNeuronParameter(C = ..., ...)`, `AdExSoma`, `Multipod`, `synapsearray`) and
+    `EyalEquivalentNAR`, defined only in an unloaded file. It now computes the same quantities
+    from `create_dendrite` and `AdExParameter`.
 """
 function get_model(L, NAR, Nd; Vs = -55)
-    try
-        neuron = DendNeuronParameter(
-            C = 281pF,
-            gl = 40nS,
-            Vr = -70.6,
-            El = -70.6,
-            ΔT = 2,
-            Vt = 1000.0f0,
-            a = 4,
-            b = 80.5,
-            τw = 144,
-            up = 1ms,
-            τabs = 1ms,
-            ds = [L, L],
-            postspike = PostSpike(A = 10.0, τA = 30.0),
-            NMDA = EyalNMDA,
-        )
-        E = Tripod(N = 1, param = neuron)
-        dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
-        gax = E.d1.gax[1, 1]
-        gm = E.d1.gm[1, 1]
-        C = E.param.C
-        gl = E.param.gl
-        a = E.param.a
-        Vr = E.param.Vr
-        return @symdict gax gm gl a Vs Vr C dend_syn Nd
-    catch e
-        @error "Error creating Tripod neuron: $e"
-        ps = PostSpike(A = 10.0, τA = 30.0)
-        adex = AdExSoma(
-            C = 281pF,
-            gl = 40nS,
-            Vr = -70.6,
-            El = -70.6,
-            ΔT = 2,
-            Vt = 1000.0f0,
-            a = 4,
-            b = 80.5,
-            τw = 144,
-            up = 1ms,
-            τabs = 1ms,
-        )
-        ls = repeat([L], Nd)
-        E = Multipod(ls; N = 1, NMDA = EyalNMDA, param = adex, postspike = ps)
+    adex = AdExParameter(
+        C = 281pF,
+        gl = 40nS,
+        Vr = -70.6mV,
+        El = -70.6mV,
+        ΔT = 2mV,
+        Vt = 1000.0f0,
+        a = 4nS,
+        b = 80.5pA,
+        τw = 144ms,
+    )
+    d = SNNModels.create_dendrite(L)
+    gax = d.gax
+    gm = d.gm
+    C = adex.C
+    gl = adex.gl
+    a = adex.a
+    Vr = adex.Vr
+    dend_syn = _eyal_equivalent_nar(NAR)
+    return @symdict gax gm gl a Vs Vr C dend_syn Nd
+end
 
-        dend_syn = EyalEquivalentNAR(NAR) |> synapsearray
-        gax = E.gax[1, 1]
-        gm = E.gm[1, 1]
-        C = E.param.C
-        gl = E.param.gl
-        a = E.param.a
-        Vr = E.param.Vr
-        return @symdict gax gm gl a Vs Vr C dend_syn Nd
-    end
+# Dendritic receptors with NMDA/AMPA ratio `NAR` (same values as `EyalEquivalentNAR` in
+# models/quaresima_2024_updown.jl): AMPA, NMDA, GABAa, GABAb.
+function _eyal_equivalent_nar(NAR, τd = 35ms)
+    NAR0 = 1.31 / 0.73
+    glu = SNNModels.Glutamatergic(
+        SNNModels.Receptor(E_rev = 0.0, τr = 0.25, τd = 2.0, g0 = 0.73(1 + NAR0 - NAR)),
+        SNNModels.ReceptorVoltage(E_rev = 0.0, τr = 8, τd = τd, g0 = 0.73 * NAR, nmda = 1.0f0),
+    )
+    return SNNModels.Receptors(glu, SNNModels.MilesGabaDend)
 end
 
 
@@ -106,31 +85,29 @@ Residual current at the dendrite of the neuron built by [`get_model`](@ref) when
 at `Vs`, with excitatory input rate `λ` and inhibitory input rate `kIE * λ` on each dendrite.
 
 The dendritic potential is set to
-``V_d = \left(g_L (V_s - V_r) + a (V_s - V_r) + N_d g_{ax} V_s
-ight) / (N_d g_{ax})``, and with
-``I_{comp} = g_{ax}(V_s - V_d) + g_m (V_d - V_r)`` the currents are, for every receptor
+``V_d = \left(g_L (V_s - V_r) + a (V_s - V_r) + N_d g_{ax} V_s\right) / (N_d g_{ax})``, and with
+``I_{comp} = g_{ax}(V_s - V_d) - g_m (V_d - V_r)`` (the current needed to hold the dendrite at
+``V_d``, the same expression as in `compute_kei`; up to SNNUtils 0.2.9 the leak term had the
+opposite sign, so `residual_current` was not zero at the ``k_{EI}`` returned by `compute_kei`) the currents are, for every receptor
 ``r`` of the dendritic synapse (first two receptors excitatory, last two inhibitory),
 ``I_r = -\bar g_r (\tau_{d,r} - \tau_{r,r})\, \lambda_r\, B_r(V_d)\, (V_d - E_r)``, where ``B_r``
 is [`nmda_curr`](@ref) for NMDA receptors and 1 otherwise.
 
-All keyword arguments except `currents` and `Vs` are required (their defaults refer to
-themselves and raise `UndefVarError` if omitted).
+All keyword arguments except `currents` and `Vs` are required. (Up to SNNUtils 0.2.9 their
+defaults referred to themselves and raised `UndefVarError` when omitted.)
 
 # Returns
 `sum(exc) + sum(inh) + I_comp`, or `(exc, inh, I_comp)` if `currents = true`.
 
-# Status
-Does not run with SNNModels 1.8.4: `get_model` calls `PostSpike(A = 10.0, τA = 30.0)`, whose
-keyword `A` does not exist (nor do the `C`, `gl`, ... keywords passed to `DendNeuronParameter`) (the error is caught, but the fallback branch calls `PostSpike` in the
-same way and would then need the undefined `AdExSoma`/`Multipod`); it also needs `EyalEquivalentNAR` (defined only in the unloaded file
-`models/quaresima_2024_updown.jl`) and `synapsearray` (exported but not defined by SNNModels).
+The neuron is built by [`get_model`](@ref) (up to SNNUtils 0.2.9 this function always threw,
+see there).
 """
 function residual_current(;
-    λ = λ,
-    kIE = kIE,
-    L = L,
-    NAR = NAR,
-    Nd = Nd,
+    λ,
+    kIE,
+    L,
+    NAR,
+    Nd,
     currents = false,
     Vs = -55mV,
 )
@@ -141,7 +118,7 @@ function residual_current(;
     Vd = (gl*(Vs - Vr) + a*(Vs - Vr) + Nd*gax*(Vs))/(Nd*gax)
 
     ## Currents
-    comp_curr = (gax*(Vs - Vd) + gm*(Vd - Vr))
+    comp_curr = (gax*(Vs - Vd) - gm*(Vd - Vr))
     exc_syn_curr = map(dend_syn[1:2]) do syn
         (
             - syn.gsyn *
@@ -173,19 +150,15 @@ and the receptor currents ``I_r`` defined as in [`residual_current`](@ref) (rate
 receptors), it returns
 
 ```math
-k_{EI} = \max\left(0,\; -\frac{\sum_{exc} I_r + I_{comp}}{\sum_{inh} I_r}
-ight).
+k_{EI} = \max\left(0,\; -\frac{\sum_{exc} I_r + I_{comp}}{\sum_{inh} I_r}\right).
 ```
 
 # Arguments
 - `L`: dendritic length; `rate`: excitatory input rate (kHz in library units).
 - `NAR = 1.8`: NMDA/AMPA ratio; `Nd = 2`: number of dendrites; `Vs = -55mV`: somatic potential.
 
-# Status
-Does not run with SNNModels 1.8.4: `get_model` calls `PostSpike(A = 10.0, τA = 30.0)`, whose
-keyword `A` does not exist (nor do the `C`, `gl`, ... keywords passed to `DendNeuronParameter`) (the error is caught, but the fallback branch calls `PostSpike` in the
-same way and would then need the undefined `AdExSoma`/`Multipod`); it also needs `EyalEquivalentNAR` (defined only in the unloaded file
-`models/quaresima_2024_updown.jl`) and `synapsearray` (exported but not defined by SNNModels).
+The neuron is built by [`get_model`](@ref) (up to SNNUtils 0.2.9 this function always threw,
+see there).
 """
 function compute_kei(L, rate; NAR = 1.8, Nd = 2, Vs = -55mV)
     @unpack gax, gm, gl, a, Vs, Vr, C, dend_syn, Nd = get_model(L, NAR, Nd, Vs = Vs)
@@ -214,7 +187,6 @@ end
 
 Evaluate [`compute_kei`](@ref)`(l, rate; NAR, Nd)` on 100 log-spaced rates between `1e-2` and
 `1e3` (library rate unit, kHz) and return the vector of results. `kwargs` are ignored.
-Inherits the status of `compute_kei` (does not run with SNNModels 1.8.4).
 """
 function optimal_kei(l, NAR, Nd; kwargs...)
     rates = exp10.(range(-2, stop = 3, length = 100))
