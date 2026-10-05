@@ -5,34 +5,24 @@ using NPZ
 
 Read the BioSeq task definitions (JSON files) and pair each task with its generator description.
 
-Returns a vector of `NamedTuple`s `(task, info)` with the parsed JSON dictionaries.
-
-Note: the file names are listed in `generator_path` but read from `task_path` (and vice versa),
-so the two folders must contain JSON files with the same names, in the same order.
+Returns a vector of `NamedTuple`s `(task, info)` with the parsed JSON dictionaries: `task` read
+from `task_path/<name>.json` and `info` from `generator_path/<name>.json`, for every JSON file
+name present in both folders (sorted by name). Files present in only one folder are skipped
+with a warning. (Up to SNNUtils 0.2.9 the names were listed in one folder and read from the
+other, and the two lists were paired by position.)
 """
 function import_bioseq_tasks(generator_path, task_path)
-    task_list = []
-    generators_list = []
-    json_files = filter(x -> occursin(".json", x), readdir(generator_path))
-    for json_file in json_files
-        file_path = joinpath(task_path, json_file)
-        file = open(file_path)
-        dict_data = JSON.parse(file)
-        close(file)
-        push!(task_list, dict_data)
-    end
-
-    json_files = filter(x -> occursin(".json", x), readdir(task_path))
-    for json_file in json_files
-        file_path = joinpath(generator_path, json_file)
-        file = open(file_path)
-        dict_data = JSON.parse(file)
-        close(file)
-        push!(generators_list, dict_data)
-    end
-
+    isjson(x) = endswith(x, ".json")
+    gen_files = filter(isjson, readdir(generator_path))
+    task_files = filter(isjson, readdir(task_path))
+    names = sort(intersect(gen_files, task_files))
+    unmatched = symdiff(gen_files, task_files)
+    isempty(unmatched) || @warn "import_bioseq_tasks: files without a match skipped: $(unmatched)"
+    read_json(path) = open(JSON.parse, path)
     experiments = []
-    for (g, t) in zip(generators_list, task_list)
+    for name in names
+        t = read_json(joinpath(task_path, name))
+        g = read_json(joinpath(generator_path, name))
         push!(experiments, (task = t, info = g))
     end
     return experiments
@@ -166,9 +156,9 @@ Save the symbol mapping (`mapping.h5`), the experiment info (`info.h5`: seed, la
 duration) and the neuron index ranges (`spikeinfo.h5`) of the populations `E`, `I1`, `I2` of
 `network` into [`root_path`](@ref)`(path, exp)`, and return that folder.
 
-Note: the ranges are built in the order `E`, then `I2.N` neurons labelled `sst`, then `I1.N`
-neurons labelled `pv`, while [`store_activity_data`](@ref) concatenates spikes in the order
-`E, I1, I2`.
+The ranges follow the order in which [`store_activity_data`](@ref) concatenates the spikes:
+`E` (`exc`), then `I1` (`pv`), then `I2` (`sst`). (Up to SNNUtils 0.2.9 they were built as `E`,
+`I2.N` neurons labelled `sst`, `I1.N` neurons labelled `pv`: wrong labels if `I1.N != I2.N`.)
 """
 function store_experiment_data(path, exp, network, seq)
     ## Root
@@ -184,14 +174,14 @@ function store_experiment_data(path, exp, network, seq)
         exc = network.pop.E.N
         pv = network.pop.I1.N
         sst = network.pop.I2.N
-        cumsum([1, exc, sst, pv]) |> x -> [collect(x[n]:(x[n+1]-1)) for n = 1:(length(x)-1)]
+        cumsum([1, exc, pv, sst]) |> x -> [collect(x[n]:(x[n+1]-1)) for n = 1:(length(x)-1)]
     end
 
     DrWatson.save(joinpath(_root, "mapping.h5"), mapping)
     DrWatson.save(joinpath(_root, "info.h5"), exp_data)
     DrWatson.save(
         joinpath(_root, "spikeinfo.h5"),
-        @strdict exc = neurons_ranges[1] sst = neurons_ranges[2] pv = neurons_ranges[3]
+        @strdict exc = neurons_ranges[1] pv = neurons_ranges[2] sst = neurons_ranges[3]
     )
     return _root
 end
@@ -275,8 +265,8 @@ spike times of `model.pop.E`, `I1`, `I2` (`spiketimes.h5`) and, for every epoch,
 membrane potential `:v_s` of `E` at the end of each element and one element later
 (`membrane_end/epoch_i.npz`, `membrane_delay/epoch_i.npz`).
 
-Note: the function calls `SNN.record`, but the name `SNN` is not defined inside SNNUtils, so it
-throws an `UndefVarError` when it reaches the membrane traces.
+(Up to SNNUtils 0.2.9 it called `SNN.record`, undefined inside SNNUtils, and threw at the
+membrane traces.)
 """
 function store_activity_data(_root::String, stage::String, sequence, model; targets = [:d])
     folder = joinpath(_root, stage) |> mkpath
@@ -291,7 +281,7 @@ function store_activity_data(_root::String, stage::String, sequence, model; targ
     DrWatson.save(joinpath(folder, "spiketimes.h5"), myspikes)
 
     # Membrane traces
-    membrane, r_t = SNN.record(model.pop.E, :v_s, range = true)
+    membrane, r_t = SNNModels.record(model.pop.E, :v_s, range = true)
     epoch_extrema =
         cumsum([0, sequence.timestamps...]) |>
         x -> [(x[n], (x[n+1])) for n = 1:(length(x)-1)]
@@ -304,7 +294,7 @@ function store_activity_data(_root::String, stage::String, sequence, model; targ
         membrane_path = joinpath(folder, "membrane_end", "epoch_$(epoch).npz")
         _timepoints = offset
         if offset_delay[end] < r_t[end]
-            mem = membrane[:, _timepoints]
+            mem = membrane(axes(membrane, 1), _timepoints)
             timestamps = _timepoints
             npzwrite(membrane_path, Dict("membrane" => mem, "timestamp" => timestamps))
         end
@@ -313,7 +303,7 @@ function store_activity_data(_root::String, stage::String, sequence, model; targ
         membrane_path = joinpath(folder, "membrane_delay", "epoch_$(epoch).npz")
         _timepoints = offset_delay
         if offset_delay[end] < r_t[end]
-            mem = membrane[:, _timepoints]
+            mem = membrane(axes(membrane, 1), _timepoints)
             timestamps = _timepoints
             npzwrite(membrane_path, Dict("membrane" => mem, "timestamp" => timestamps))
         end

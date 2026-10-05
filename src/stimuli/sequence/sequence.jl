@@ -225,8 +225,8 @@ end
 Merge consecutive intervals that touch (`end` of one equal to `start` of the next) into a single
 interval. `skip` is unused.
 
-Note: when the last interval does not touch the previous one it is dropped
-(`merge_intervals([[0, 1], [3, 4], [5, 6]])` returns `[[0, 1], [3, 4]]`).
+`merge_intervals([[0, 1], [3, 4], [5, 6]])` returns the three intervals. (Up to SNNUtils 0.2.9
+the last interval was dropped when it did not touch the previous one.)
 
 # Example
 ```julia
@@ -237,6 +237,7 @@ merge_intervals([[0f0, 1f0], [1f0, 2f0]])   # [[0.0, 2.0]]
 function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
     merged_intervals = Vector{Vector{Float32}}()
     all_intervals = length(intervals)
+    all_intervals == 0 && return merged_intervals
 
     current_start = :new_item
     current_end = nothing
@@ -253,7 +254,7 @@ function merge_intervals(intervals::Vector{Vector{Float32}}, skip=nothing)
         if current_end == local_start
             current_end = local_end
         ## if the current end is different from the local start, we push the current interval to the merged intervals and start a new interval with the local start and local end
-        elseif i < all_intervals
+        else
             push!(merged_intervals, [current_start, current_end])
             current_start = local_start
             current_end = local_end

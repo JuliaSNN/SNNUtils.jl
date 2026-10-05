@@ -14,15 +14,16 @@ rate `peak_rate` that is active only inside its intervals (set them later with
 random fraction `p_post` of the neurons of the target population, on the receptor `sym` of each
 compartment in `targets`.
 
-`MultiCompartmentStimulusGroup` requires a `Vector{Symbol}` of compartments, so the default
-`targets = [nothing]` raises a `MethodError`: pass the compartments explicitly (e.g.
-`[:d1, :d2]` for a `Tripod`). Point-neuron targets are not supported by this function.
+With the default `targets = [nothing]` the input targets a point neuron (one element per
+group); pass the compartments for dendritic neurons (e.g. `[:d1, :d2]` for a `Tripod`). (Up to
+SNNUtils 0.2.9, with SNNModels 1.8.4, the default raised a `MethodError`.)
 
 # Arguments
 - `inputs`: iterable of stimulus names (e.g. `stimuli_names(lexicon).all`).
 - `network::NamedTuple`: model with a `pop` field.
 - `sym::Symbol = :glu`: target receptor/variable.
-- `targets = [nothing]`: target compartments (e.g. `[:d1, :d2]` for a Tripod); see above.
+- `targets = [nothing]`: target compartments (`[nothing]` for a point neuron, e.g. `[:d1, :d2]`
+  for a Tripod).
 - `pop::Symbol = :Exc`: key of the target population in `network.pop`.
 - `p_post::Real`: probability that a neuron of `pop` receives the input.
 - `peak_rate::Real`: Poisson rate inside the active intervals (library unit: kHz, write e.g.

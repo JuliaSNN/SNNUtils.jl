@@ -7,16 +7,21 @@ Sequence generator for [`generate_sequence`](@ref): draw `presentations` words f
 
 Modes:
 - `:fixed`: every word `w` in `weights` (a `Dict` word => weight) is presented
-  `floor(Int, weights[w] * presentations / sum(values(weights)))` times, in random order. If the
-  rounded counts sum to less than `presentations`, the function errors when the list is exhausted
-  (`pop!` on an empty vector).
+  `floor(Int, weights[w] * presentations / sum(values(weights)))` times, plus one extra
+  presentation for the words with the largest remainders until the total is `presentations`,
+  in random order.
 - `:random`: words are sampled independently with probabilities proportional to `weights[w]`
   (0 for words not in `weights`).
 - `:balanced`: words are sampled with weights `exp(-count(w))`, favouring words presented less
   often; `weights` is ignored.
 
-If `seed !== nothing`, `Random.seed!(seed)` is called. One final silence element is appended.
-The function prints `mode` and the final word counts (`@show`).
+`weights = nothing` means equal weights for all the words of the lexicon. If `seed !== nothing`,
+`Random.seed!(seed)` is called. One final silence element is appended. The word counts are
+logged at debug level.
+
+(Up to SNNUtils 0.2.9 `:fixed` failed with `pop!` on an empty list when the rounded counts summed
+to less than `presentations`, `weights = nothing` failed for `:fixed`/`:random`, and the function
+printed with `@show`.)
 
 # Returns
 `(words, phonemes, seq_length)`: the word of each element, the phoneme of each element, and
@@ -48,10 +53,10 @@ function word_phonemes_sequence(;
     end
 
     lexicon_words = collect(keys(dict))
+    weights = isnothing(weights) ? Dict(word => 1.0 for word in lexicon_words) : weights
 
     word_count = Dict(word => 0 for word in lexicon_words)
     weight_list = nothing
-    @show mode
     if  mode == :balanced
         weight_list = map(lexicon_words) do word
                         exp(-1/word_count[word])
@@ -63,8 +68,14 @@ function word_phonemes_sequence(;
     elseif mode == :fixed
         total_weight = sum(values(weights))
         word_list = []
-        for (word, weight) in pairs(weights)
-            count = floor(Int, weight * presentations / total_weight)
+        wkeys = collect(keys(weights))
+        exact = [weights[w] * presentations / total_weight for w in wkeys]
+        counts = floor.(Int, exact)
+        # distribute the remaining presentations to the largest remainders
+        for k in sortperm(exact .- counts, rev = true)[1:(presentations-sum(counts))]
+            counts[k] += 1
+        end
+        for (word, count) in zip(wkeys, counts)
             append!(word_list, fill(word, count))
         end
         shuffle!(word_list)
@@ -96,7 +107,7 @@ function word_phonemes_sequence(;
     push!(words, silence)
     push!(phonemes, silence)
     seq_length = length(words)
-    @show word_count
+    @debug "word counts" word_count
 
     return words, phonemes, seq_length
 end
