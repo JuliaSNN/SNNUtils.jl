@@ -1,31 +1,28 @@
-"""
+@doc raw"""
     get_model(L, NAR, Nd; Vs = -55)
 
-Construct a neural model with specified parameters and return its physiological properties.
+Build a single dendritic neuron (two dendrites of length `L`, via `Tripod`; if that fails, a
+`Multipod` with `Nd` dendrites) with fixed AdEx-like somatic parameters
+(``C = 281`` pF, ``g_L = 40`` nS, ``E_L = V_r = -70.6`` mV, ``a = 4`` nS, ``b = 80.5`` pA,
+``\tau_w = 144`` ms, spike threshold disabled with ``V_t = 1000`` mV) and Eyal NMDA kinetics,
+and return its passive properties.
 
 # Arguments
-- `L`: Length parameter for the neuron model
-- `NAR`: NAR parameter for synapse configuration
-- `Nd`: Number of dendrites
-- `Vs`: Somatic voltage (default: -55)
+- `L`: dendritic length (library length unit, e.g. `200um`).
+- `NAR`: NMDA/AMPA ratio passed to `EyalEquivalentNAR`.
+- `Nd`: number of dendrites (used by the `Multipod` fallback and returned).
+- `Vs = -55`: target somatic potential (mV), returned unchanged.
 
 # Returns
-A dictionary containing:
-- `gax`: Axial conductance
-- `gm`: Membrane conductance
-- `gl`: Leak conductance
-- `a`: Adaptation parameter
-- `Vs`: Somatic voltage
-- `Vr`: Resting potential
-- `C`: Membrane capacitance
-- `dend_syn`: Dendritic synapse array
-- `Nd`: Number of dendrites
+A `Dict{Symbol,Any}` (from `@symdict`) with `gax` (axial conductance), `gm` (dendritic membrane
+conductance), `gl`, `a`, `Vs`, `Vr`, `C`, `dend_syn` (dendritic receptors from
+`EyalEquivalentNAR(NAR)`), `Nd`.
 
-# Implementation Notes
-- First attempts to create a Tripod neuron model
-- Falls back to Multipod model if Tripod creation fails
-- Both models use Eyal NMDA parameters
-- Synapses are configured using EyalEquivalentNAR with the given NAR parameter
+# Status
+Does not run with SNNModels 1.8.4: `get_model` calls `PostSpike(A = 10.0, τA = 30.0)`, whose
+keyword `A` does not exist (nor do the `C`, `gl`, ... keywords passed to `DendNeuronParameter`) (the error is caught, but the fallback branch calls `PostSpike` in the
+same way and would then need the undefined `AdExSoma`/`Multipod`); it also needs `EyalEquivalentNAR` (defined only in the unloaded file
+`models/quaresima_2024_updown.jl`) and `synapsearray` (exported but not defined by SNNModels).
 """
 function get_model(L, NAR, Nd; Vs = -55)
     try
@@ -85,63 +82,48 @@ function get_model(L, NAR, Nd; Vs = -55)
 end
 
 
-"""
+@doc raw"""
     nmda_curr(V)
 
-Compute the NMDA current based on the given membrane potential.
+NMDA magnesium-block factor at membrane potential `V` (mV), with the `EyalNMDA` parameters
+(`mg`, `b`, `k`) of SNNModels:
 
-# Arguments
-- `V`: Membrane potential (in mV)
+```math
+B(V) = \left(1 + \frac{[\mathrm{Mg}]}{b}\, e^{k V}\right)^{-1}
+```
 
-# Returns
-The NMDA current value, calculated using the Eyal NMDA parameters:
-- `mg`: Magnesium concentration
-- `b`: Binding constant
-- `k`: Voltage scaling factor
-
-The calculation follows the formula:
-(1 + (mg/b) * exp(k*V))^-1
-
-# Implementation Notes
-- Uses the EyalNMDA parameters (mg, b, k) which should be defined elsewhere
-- Converts the input voltage to Float32 for numerical stability
-- Returns a Float32 value representing the NMDA current
+Returns a `Float32` (dimensionless, between 0 and 1). Not exported.
 """
 function nmda_curr(V)
     @unpack mg, b, k = EyalNMDA
     return (1.0f0 + (mg / b) * exp(k * Float32(V)))^-1
 end
 
-"""
+@doc raw"""
     residual_current(; λ, kIE, L, NAR, Nd, currents = false, Vs = -55mV)
 
-Compute the residual current at the dendrites for a neural model with given parameters.
+Residual current at the dendrite of the neuron built by [`get_model`](@ref) when the soma is held
+at `Vs`, with excitatory input rate `λ` and inhibitory input rate `kIE * λ` on each dendrite.
 
-# Arguments
-- `λ`: Firing rate parameter
-- `kIE`: Inhibitory current scaling factor
-- `L`: Length parameter for the neuron model
-- `NAR`: NAR parameter for synapse configuration
-- `Nd`: Number of dendrites
-- `currents`: Boolean flag to return individual currents (default: false)
-- `Vs`: Somatic voltage (default: -55mV)
+The dendritic potential is set to
+``V_d = \left(g_L (V_s - V_r) + a (V_s - V_r) + N_d g_{ax} V_s
+ight) / (N_d g_{ax})``, and with
+``I_{comp} = g_{ax}(V_s - V_d) + g_m (V_d - V_r)`` the currents are, for every receptor
+``r`` of the dendritic synapse (first two receptors excitatory, last two inhibitory),
+``I_r = -\bar g_r (\tau_{d,r} - \tau_{r,r})\, \lambda_r\, B_r(V_d)\, (V_d - E_r)``, where ``B_r``
+is [`nmda_curr`](@ref) for NMDA receptors and 1 otherwise.
+
+All keyword arguments except `currents` and `Vs` are required (their defaults refer to
+themselves and raise `UndefVarError` if omitted).
 
 # Returns
-If `currents` is false (default):
-- The total residual current (sum of excitatory synaptic current, inhibitory synaptic current, and compartmental current)
+`sum(exc) + sum(inh) + I_comp`, or `(exc, inh, I_comp)` if `currents = true`.
 
-If `currents` is true:
-- A tuple containing:
-  1. Array of excitatory synaptic currents
-  2. Array of inhibitory synaptic currents
-  3. Compartmental current
-
-# Implementation Notes
-- Uses the `get_model` function to obtain neuron parameters
-- Calculates the target dendritic voltage based on somatic and resting potentials
-- Computes currents using the Eyal NMDA parameters for NMDA synapses
-- The inhibitory current is scaled by the `kIE` parameter
-- The function includes debug logging for tracking parameter values
+# Status
+Does not run with SNNModels 1.8.4: `get_model` calls `PostSpike(A = 10.0, τA = 30.0)`, whose
+keyword `A` does not exist (nor do the `C`, `gl`, ... keywords passed to `DendNeuronParameter`) (the error is caught, but the fallback branch calls `PostSpike` in the
+same way and would then need the undefined `AdExSoma`/`Multipod`); it also needs `EyalEquivalentNAR` (defined only in the unloaded file
+`models/quaresima_2024_updown.jl`) and `synapsearray` (exported but not defined by SNNModels).
 """
 function residual_current(;
     λ = λ,
@@ -179,28 +161,31 @@ function residual_current(;
     end
 end
 
-"""
+@doc raw"""
     compute_kei(L, rate; NAR = 1.8, Nd = 2, Vs = -55mV)
 
-Compute the optimal inhibitory current scaling factor (kei) for a neural model with given parameters such that the soma is at the required voltage and the residual dendritic current is zero.
+Inhibitory-to-excitatory rate ratio ``k_{EI}`` that makes the net dendritic current zero when
+the soma of the neuron built by [`get_model`](@ref) is held at `Vs` and every dendrite receives
+excitatory input at rate `rate`.
+
+With ``V_d = (g_L + a)(V_s - V_r)/(N_d g_{ax}) + V_s``, ``I_{comp} = -g_{ax}(V_d - V_s) - g_m (V_d - V_r)``
+and the receptor currents ``I_r`` defined as in [`residual_current`](@ref) (rate `rate` for all
+receptors), it returns
+
+```math
+k_{EI} = \max\left(0,\; -\frac{\sum_{exc} I_r + I_{comp}}{\sum_{inh} I_r}
+ight).
+```
 
 # Arguments
-- `L`: Length parameter for the neuron model
-- `rate`: Firing rate parameter
-- `NAR`: NAR parameter for synapse configuration (default: 1.8)
-- `Nd`: Number of dendrites (default: 2)
-- `Vs`: Somatic voltage (default: -52mV)
+- `L`: dendritic length; `rate`: excitatory input rate (kHz in library units).
+- `NAR = 1.8`: NMDA/AMPA ratio; `Nd = 2`: number of dendrites; `Vs = -55mV`: somatic potential.
 
-# Returns
-The optimal inhibitory current scaling factor (kei), calculated as:
-kei = max(0, - (sum(exc_syn_curr) + sum(comp_curr)) / sum(inh_syn_curr))
-
-# Implementation Notes
-- Uses the `get_model` function to obtain neuron parameters
-- Calculates the target dendritic voltage based on somatic and resting potentials
-- Computes currents using the Eyal NMDA parameters for NMDA synapses
-- The function ensures the returned value is non-negative
-- The calculation follows the principle of balancing excitatory and inhibitory inputs
+# Status
+Does not run with SNNModels 1.8.4: `get_model` calls `PostSpike(A = 10.0, τA = 30.0)`, whose
+keyword `A` does not exist (nor do the `C`, `gl`, ... keywords passed to `DendNeuronParameter`) (the error is caught, but the fallback branch calls `PostSpike` in the
+same way and would then need the undefined `AdExSoma`/`Multipod`); it also needs `EyalEquivalentNAR` (defined only in the unloaded file
+`models/quaresima_2024_updown.jl`) and `synapsearray` (exported but not defined by SNNModels).
 """
 function compute_kei(L, rate; NAR = 1.8, Nd = 2, Vs = -55mV)
     @unpack gax, gm, gl, a, Vs, Vr, C, dend_syn, Nd = get_model(L, NAR, Nd, Vs = Vs)
@@ -224,6 +209,13 @@ function compute_kei(L, rate; NAR = 1.8, Nd = 2, Vs = -55mV)
     λ = - (sum(exc_syn_curr) + sum(comp_curr))/sum(inh_syn_curr)
     return maximum([0.0, λ])
 end
+"""
+    optimal_kei(l, NAR, Nd; kwargs...)
+
+Evaluate [`compute_kei`](@ref)`(l, rate; NAR, Nd)` on 100 log-spaced rates between `1e-2` and
+`1e3` (library rate unit, kHz) and return the vector of results. `kwargs` are ignored.
+Inherits the status of `compute_kei` (does not run with SNNModels 1.8.4).
+"""
 function optimal_kei(l, NAR, Nd; kwargs...)
     rates = exp10.(range(-2, stop = 3, length = 100))
     [compute_kei(l, rate; NAR = NAR, Nd = Nd) for rate in rates]

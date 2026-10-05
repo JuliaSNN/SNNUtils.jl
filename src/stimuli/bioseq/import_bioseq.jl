@@ -1,5 +1,15 @@
 using NPZ
 
+"""
+    import_bioseq_tasks(generator_path, task_path)
+
+Read the BioSeq task definitions (JSON files) and pair each task with its generator description.
+
+Returns a vector of `NamedTuple`s `(task, info)` with the parsed JSON dictionaries.
+
+Note: the file names are listed in `generator_path` but read from `task_path` (and vice versa),
+so the two folders must contain JSON files with the same names, in the same order.
+"""
 function import_bioseq_tasks(generator_path, task_path)
     task_list = []
     generators_list = []
@@ -28,6 +38,11 @@ function import_bioseq_tasks(generator_path, task_path)
     return experiments
 end
 
+"""
+    bioseq_epochs(experiment, stage)
+
+Return the list of epochs (the values of `experiment.task[stage]`) of a BioSeq experiment stage.
+"""
 function bioseq_epochs(experiment, stage)
     epochs = []
     for epoch in keys(experiment.task[stage])
@@ -54,6 +69,13 @@ function make_unique_sequence(epochs, post_silence = 1)
 end
 
 
+"""
+    bioseq_lexicon(; experiment, duration::Float32 = 50.0f0, kwargs...)
+
+Build a lexicon (same layout as [`generate_lexicon`](@ref)) from a BioSeq experiment: the words
+are the strings of `experiment.info["task"]["test_string_set"]`, the phonemes their characters.
+`ph_duration` is the scalar `duration` (ms) shared by all symbols; `silence = :_`.
+"""
 function bioseq_lexicon(; experiment, duration::Float32 = 50.0f0, kwargs...)
     dictionary = Dict{Symbol,Vector{Symbol}}()
     for w in experiment.info["task"]["test_string_set"]
@@ -72,6 +94,18 @@ function bioseq_lexicon(; experiment, duration::Float32 = 50.0f0, kwargs...)
     )
 end
 
+"""
+    seq_bioseq(; experiment, stage::String, kwargs...)
+
+Build the timed sequence of a BioSeq experiment stage. The epochs of `stage` are concatenated
+with one silence element after each (`#` is replaced by silence), words of the lexicon are
+located in the phoneme stream, and every element lasts `ph_duration`.
+
+# Returns
+The lexicon of [`bioseq_lexicon`](@ref) extended with `sequence` (a `3 x L` matrix: words,
+phonemes, durations), `line_id = (phonemes = 2, words = 1, duration = 3)` and `timestamps` (the
+duration of each epoch in ms). `kwargs` are passed to `bioseq_lexicon` (e.g. `duration`).
+"""
 function seq_bioseq(; experiment, stage::String, kwargs...)
     lexicon = bioseq_lexicon(experiment = experiment; kwargs...)
     @unpack phonemes, words = lexicon.symbols
@@ -112,6 +146,12 @@ function seq_bioseq(; experiment, stage::String, kwargs...)
 end
 
 
+"""
+    root_path(path, exp)
+
+Create (if needed) and return the folder `path/id-<seed>_seed-<seed_network>_<label>` for the
+experiment `exp` (fields taken from `exp.info`).
+"""
 function root_path(path, exp)
     label = exp.info["label"]
     seed = exp.info["seed_network"]
@@ -119,6 +159,17 @@ function root_path(path, exp)
     return joinpath(path, "id-$(id)_seed-$(seed)_$(label)") |> mkpath
 end
 
+"""
+    store_experiment_data(path, exp, network, seq)
+
+Save the symbol mapping (`mapping.h5`), the experiment info (`info.h5`: seed, label, symbol
+duration) and the neuron index ranges (`spikeinfo.h5`) of the populations `E`, `I1`, `I2` of
+`network` into [`root_path`](@ref)`(path, exp)`, and return that folder.
+
+Note: the ranges are built in the order `E`, then `I2.N` neurons labelled `sst`, then `I1.N`
+neurons labelled `pv`, while [`store_activity_data`](@ref) concatenates spikes in the order
+`E, I1, I2`.
+"""
 function store_experiment_data(path, exp, network, seq)
     ## Root
     _root = root_path(path, exp)
@@ -145,6 +196,13 @@ function store_experiment_data(path, exp, network, seq)
     return _root
 end
 
+"""
+    store_target_pops(_root, seq, stim, targets)
+
+Save to `target_pops.h5` in `_root` the indices of the neurons targeted by the stimulus of every
+phoneme and word of `seq` (union over the compartments `targets`, read as
+`getfield(getfield(stim, symbol), target).neurons`). Returns `_root`.
+"""
 function store_target_pops(_root, seq, stim, targets)
     folder = _root
     target_pops = Dict{String,Vector{Int}}()
@@ -176,6 +234,13 @@ end
 #     return ph_stim
 # end
 
+"""
+    store_labels(_root, stim, sequence, targets)
+
+Save to `labels.h5` in `_root` a dictionary mapping the onset time of every phoneme presentation
+(read from the intervals of the stimulus `stim[Symbol(phoneme, "_", targets[1])]`) to the
+phoneme, and return the dictionary.
+"""
 function store_labels(_root, stim, sequence, targets)
     folder = _root
     # Get the labels
@@ -202,6 +267,17 @@ end
 
 
 
+"""
+    store_activity_data(_root::String, stage::String, sequence, model; targets = [:d])
+
+Save the activity of a BioSeq run in `_root/stage`: phoneme labels ([`store_labels`](@ref)),
+spike times of `model.pop.E`, `I1`, `I2` (`spiketimes.h5`) and, for every epoch, the somatic
+membrane potential `:v_s` of `E` at the end of each element and one element later
+(`membrane_end/epoch_i.npz`, `membrane_delay/epoch_i.npz`).
+
+Note: the function calls `SNN.record`, but the name `SNN` is not defined inside SNNUtils, so it
+throws an `UndefVarError` when it reaches the membrane traces.
+"""
 function store_activity_data(_root::String, stage::String, sequence, model; targets = [:d])
     folder = joinpath(_root, stage) |> mkpath
     @unpack stim = model

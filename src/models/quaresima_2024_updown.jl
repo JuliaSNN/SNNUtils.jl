@@ -1,3 +1,6 @@
+# Not loaded by SNNUtils 0.2.9. Requires the definitions of quaresima2022.jl. `EyalGluNAR` and
+# `EyalEquivalentNAR` work with SNNModels 1.8.4; `quaresima2022_nar` uses the removed type
+# `AdExSoma` and fails; `quaresima2022_nonmda` is exported but not defined.
 NAR0 = 1.31/0.73
 EyalGluNAR(NAR = 1.8, τd = 35ms) = Glutamatergic(
     Receptor(E_rev = 0.0, τr = 0.25, τd = 2.0, g0 = 0.73(1+NAR0-NAR)),

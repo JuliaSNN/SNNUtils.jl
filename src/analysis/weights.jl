@@ -1,19 +1,18 @@
 ## Clustering analysis with hierarchical clustering algorithm
 
 """
-    average_weight_dynamics(pre::Vector{Int}, post::Vector{Int}, synapse::SpikingSynapse, record::Matrix{R}) where R <: Real
+    average_weight_dynamics(pre::Vector{Int}, post::Vector{Int}, synapse::SpikingSynapse, record::Matrix{R}) where {R<:Real}
 
-    Compute the average weight of connections between two populations.  
+Average weight of the connections from the neurons `pre` to the neurons `post` of `synapse`, at
+every column (time point) of `record`.
 
-    # Arguments
-    - pre::Vector{Int}: Vector of pre-synaptic neurons
-    - post::Vector{Int}: Vector of post-synaptic neurons
-    - synapse::SpikingSynapse: Receptors object
-    - record::Matrix{R}: Matrix of recorded weights
+`record` is a matrix of weights with one row per synapse, in the storage order of `synapse.W`
+(compressed sparse column order), and one column per time point, e.g. a weight record of the
+synapse. For each column, the entries of all synapses with presynaptic neuron in `pre` and
+postsynaptic neuron in `post` are averaged (`NaN` if there is no such synapse).
 
-    # Returns
-    - average_t::Vector{R}: Vector of average weights for each time step
-
+# Returns
+`Vector{Float64}` of length `size(record, 2)`.
 """
 function average_weight_dynamics(
     pre::Vector{Int},
@@ -37,6 +36,12 @@ function average_weight_dynamics(
     return average_t
 end
 
+"""
+    average_weight(pre_pop_neurons::Vector{Int}, post_pop_neurons::Vector{Int}, synapse::SpikingSynapse)
+
+Mean of the current weights `synapse.W` of the connections from `pre_pop_neurons` to
+`post_pop_neurons` (iterating over the row-ordered index of the sparse synapse). Not exported.
+"""
 function average_weight(
     pre_pop_neurons::Vector{Int},
     post_pop_neurons::Vector{Int},

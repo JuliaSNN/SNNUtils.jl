@@ -1,3 +1,6 @@
+# Not loaded by SNNUtils 0.2.9. Plain NamedTuples of connection rules (p, μ, dist, σ);
+# loads in a module that uses Distributions, but `dist = Normal` (a type) is rejected by
+# SNNModels 1.8.4 `SpikingSynapse(...; conn)`, which expects a Symbol (`dist = :Normal`).
 
 duarte_types = [0.8, 0.2 * 0.65, 0.2 * 0.35]
 pv_only = [0.8, 0.0, 0.2]

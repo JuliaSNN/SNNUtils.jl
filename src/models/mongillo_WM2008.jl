@@ -1,3 +1,5 @@
+# Not loaded by SNNUtils 0.2.9. Defines `Mongillo2008`, which uses `IFCurrent` and
+# `IFCurrentDeltaParameter`, not defined in SNNModels 1.8.4: calling it fails.
 
 function Mongillo2008(; n_assemblies = 1, n_neurons = 800)
     MongilloParam = (

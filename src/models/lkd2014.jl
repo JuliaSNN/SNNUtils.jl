@@ -1,3 +1,6 @@
+# Not loaded by SNNUtils 0.2.9. Uses keyword arguments (`τabs`, `τri`, `τde`, `E_i`, `At`, ...) and types
+# (`AdExSinExpParameter`, `IFSinExpParameter`) that do not exist in SNNModels 1.8.4: including the
+# file fails.
 
 """
 Litwin-Kumar, A., & Doiron, B. (2014). Formation and maintenance of neuronal assemblies through synaptic plasticity. Nature Communications, 5(1). https://doi.org/10.1038/ncomms6319

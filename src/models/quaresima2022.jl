@@ -1,3 +1,5 @@
+# Not loaded by SNNUtils 0.2.9. Receptor sets of the Tripod neuron (Quaresima et al. 2022);
+# can be included in a module that uses SNNModels: all definitions work with SNNModels 1.8.4.
 
 #############################################################
 ###########       Receptors parameters        #################

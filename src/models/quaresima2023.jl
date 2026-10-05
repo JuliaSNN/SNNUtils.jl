@@ -1,3 +1,6 @@
+# Not loaded by SNNUtils 0.2.9. Plasticity and connectivity parameters; works with
+# SNNModels 1.8.4 when included (the `dist` types of `connectivity` must be converted to Symbols
+# for SNNModels `conn`). `ballstick_network` is exported but not defined.
 quaresima2023 = (
     plasticity = (
         iSTDP_rate = iSTDPRate(η = 0.2, τy = 5ms, r = 10Hz, Wmax = 243.4pF, Wmin = 0.1pF),

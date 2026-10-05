@@ -1,3 +1,5 @@
+# Not loaded by SNNUtils 0.2.9. Uses `AdExSoma` and `IFParameterGsyn`, which do not exist in
+# SNNModels 1.8.4: including the file fails.
 dendritic_stp_network = let
     EyalGluDend = Glutamatergic(
         Receptor(E_rev = 0.0, τr = 0.26, τd = 2.0, g0 = 0.73),

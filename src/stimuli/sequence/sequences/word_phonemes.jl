@@ -1,20 +1,34 @@
 """
-    generate_random_word_sequence(sequence_length, dictionary, silence_symbol; silent_intervals=1, weights=nothing)
+    word_phonemes_sequence(; lexicon, weights = nothing, mode = :fixed, seed = nothing,
+                           silent_intervals = 1, presentations, kwargs...)
 
-Generate a random word sequence of a given length using a dictionary of words and their corresponding phonemes.
+Sequence generator for [`generate_sequence`](@ref): draw `presentations` words from
+`lexicon.dict` and expand each into its phonemes, followed by `silent_intervals` silence elements.
 
-# Arguments
-- `sequence_length::Int`: The desired length of the word sequence.
-- `dictionary::Dict{Symbol, Vector{Symbol}}`: A dictionary mapping words to their corresponding phonemes.
-- `silence_symbol::Symbol`: The symbol representing silence in the word sequence.
+Modes:
+- `:fixed`: every word `w` in `weights` (a `Dict` word => weight) is presented
+  `floor(Int, weights[w] * presentations / sum(values(weights)))` times, in random order. If the
+  rounded counts sum to less than `presentations`, the function errors when the list is exhausted
+  (`pop!` on an empty vector).
+- `:random`: words are sampled independently with probabilities proportional to `weights[w]`
+  (0 for words not in `weights`).
+- `:balanced`: words are sampled with weights `exp(-count(w))`, favouring words presented less
+  often; `weights` is ignored.
 
-# Optional Arguments
-- `silent_intervals::Int = 1`: The number of silent intervals between words.
-- `weights::Union{Nothing, Vector{Float64}} = nothing`: The weights assigned to each word in the dictionary. If `nothing`, all words have equal weight.
+If `seed !== nothing`, `Random.seed!(seed)` is called. One final silence element is appended.
+The function prints `mode` and the final word counts (`@show`).
 
 # Returns
-- `words::Vector{Symbol}`: The generated word sequence.
-- `phonemes::Vector{Symbol}`: The corresponding phonemes for each word in the sequence.
+`(words, phonemes, seq_length)`: the word of each element, the phoneme of each element, and
+their common length.
+
+# Example
+```julia
+using SpikingNeuralNetworks, SNNUtils
+SNN.@load_units
+lexicon = get_lexicon([:AB, :BA], 50ms)
+words, phonemes, L = word_phonemes_sequence(; lexicon, presentations = 4, mode = :balanced)
+```
 """
 function word_phonemes_sequence(;
     lexicon,

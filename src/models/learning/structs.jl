@@ -1,3 +1,5 @@
+# Not loaded by SNNUtils 0.2.9. Legacy parameter structs (`STDP`, `ISTDP`, `TripletRule`, `NLTAH`)
+# not used by SNNModels; the plasticity rules of SNNModels replace them.
 # Clopath 2010
 @with_kw struct STDP
     #voltage based stdp
