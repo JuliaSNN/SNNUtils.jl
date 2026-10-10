@@ -47,7 +47,7 @@ function average_weight(
     post_pop_neurons::Vector{Int},
     synapse::SpikingSynapse,
 )
-    @unpack W = synapse
+    W = plasticity_value(synapse, :W)   # the current weights (a rule may defer the update of `synapse.W`)
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
     index = synapse.index
