@@ -2,12 +2,9 @@ using LIBSVM
 using CategoricalArrays
 using StatsBase
 using MultivariateStats
-using LinearAlgebra
 using StatisticalMeasures
 import SNNModels: AbstractPopulation
-using ScientificTypes
 using MLJ
-using Tables
 using MLJLinearModels
 using DataFrames
 using MLJTransforms
