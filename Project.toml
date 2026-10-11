@@ -1,6 +1,6 @@
 name = "SNNUtils"
 uuid = "df079cdf-2344-43fe-90b5-fc41d8d26db7"
-version = "0.2.10"
+version = "2.0.0"
 authors = ["alequa <alessio.quaresima@pasteur.fr>"]
 
 [deps]
@@ -54,7 +54,7 @@ NPZ = "0.4"
 Parameters = "0.12"
 Printf = "1.11"
 Random = "1.11"
-SNNModels = "1.9"
+SNNModels = "2"
 ScientificTypes = "3.1.1"
 Serialization = "1.11"
 StatisticalMeasures = "0.1, 0.3"
