@@ -5,7 +5,7 @@ Passive properties of a dendritic neuron with dendrites of length `L` (human den
 physiology, `create_dendrite(L)`), the fixed AdEx-like somatic parameters of the Tripod model
 (``C = 281`` pF, ``g_L = 40`` nS, ``E_L = V_r = -70.6`` mV, ``a = 4`` nS, ``b = 80.5`` pA,
 ``\tau_w = 144`` ms) and dendritic receptors with NMDA/AMPA ratio `NAR`
-(`EyalEquivalentNAR`: AMPA ``g_0 = 0.73(1 + 1.31/0.73 - NAR)`` nS, NMDA ``g_0 = 0.73\,NAR`` nS
+(AMPA ``g_0 = 0.73(1 + 1.31/0.73 - NAR)`` nS, NMDA ``g_0 = 0.73\,NAR`` nS
 with ``\tau_d = 35`` ms, and the `MilesGabaDend` GABA receptors).
 
 # Arguments
@@ -21,10 +21,9 @@ AMPA, NMDA, GABAa, GABAb), `Nd`.
 
 !!! note "Changed after SNNUtils 0.2.9"
     Up to 0.2.9 `get_model` (and therefore `residual_current`, `compute_kei`, `optimal_kei`)
-    always threw: it used keywords and types removed from SNNModels (`PostSpike(A = ...)`,
-    `DendNeuronParameter(C = ..., ...)`, `AdExSoma`, `Multipod`, `synapsearray`) and
-    `EyalEquivalentNAR`, defined only in an unloaded file. It now computes the same quantities
-    from `create_dendrite` and `AdExParameter`.
+    always threw: it used keywords and types removed from SNNModels and a receptor constructor
+    defined only in an unloaded file. It now computes the same quantities from `create_dendrite`
+    and `AdExParameter`.
 """
 function get_model(L, NAR, Nd; Vs = -55)
     adex = AdExParameter(
@@ -49,8 +48,7 @@ function get_model(L, NAR, Nd; Vs = -55)
     return @symdict gax gm gl a Vs Vr C dend_syn Nd
 end
 
-# Dendritic receptors with NMDA/AMPA ratio `NAR` (same values as `EyalEquivalentNAR` in
-# models/quaresima_2024_updown.jl): AMPA, NMDA, GABAa, GABAb.
+# Dendritic receptors with NMDA/AMPA ratio `NAR`: AMPA, NMDA, GABAa, GABAb.
 function _eyal_equivalent_nar(NAR, τd = 35ms)
     NAR0 = 1.31 / 0.73
     glu = SNNModels.Glutamatergic(
