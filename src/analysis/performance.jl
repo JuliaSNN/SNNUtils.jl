@@ -16,6 +16,7 @@ function average_weight(
     post_pop_neurons::Vector{Int},
     synapse::SpikingSynapse,
 )
+    SNNModels.ensure_transpose!(synapse)   # J/index are built only when read (SNNModels 1.10)
     @unpack W = synapse
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
@@ -38,6 +39,7 @@ function weights_indices(
     post_pop_neurons::Vector{Int},
     synapse::SpikingSynapse,
 )
+    SNNModels.ensure_transpose!(synapse)
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
     index = synapse.index
@@ -59,6 +61,7 @@ function update_weight!(
     post_pop_neurons::Vector{Int},
     synapse::SpikingSynapse,
 )
+    SNNModels.ensure_transpose!(synapse)   # J/index are built only when read (SNNModels 1.10)
     @unpack W = synapse
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices

@@ -48,6 +48,7 @@ function average_weight(
     synapse::SpikingSynapse,
 )
     W = plasticity_value(synapse, :W)   # the current weights (a rule may defer the update of `synapse.W`)
+    SNNModels.ensure_transpose!(synapse)   # J/index are built only when read (SNNModels 1.10)
     rowptr = synapse.rowptr
     J = synapse.J  # Presynaptic neuron indices
     index = synapse.index
