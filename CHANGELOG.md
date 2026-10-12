@@ -1,8 +1,8 @@
 # SNNUtils changelog
 
-## 2.0.0
+## 1.0.0
 
-Requires SNNModels 2 (compat `SNNModels = "2"`); version number follows SNNModels.
+Requires SNNModels 2 (compat `SNNModels = "2"`); first 1.x release (previous registered version 0.2.10).
 
 - Weight analysis reads plastic weights through `plasticity_value`, and builds the synapse transpose arrays
   (`ensure_transpose!`) before reading `J`/`index`, which are lazy in SNNModels 2.

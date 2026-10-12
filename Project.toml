@@ -1,6 +1,6 @@
 name = "SNNUtils"
 uuid = "df079cdf-2344-43fe-90b5-fc41d8d26db7"
-version = "2.0.0"
+version = "1.0.0"
 authors = ["alequa <alessio.quaresima@pasteur.fr>"]
 
 [deps]
