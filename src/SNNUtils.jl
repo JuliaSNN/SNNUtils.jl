@@ -12,9 +12,6 @@ Protocols and analysis tools built on SNNModels:
   ([`sample_stp_params`](@ref), [`sample_stp_campagnola`](@ref));
 - weight and decoding analysis ([`average_weight_dynamics`](@ref), [`SVCtrain`](@ref),
   [`score_spikes`](@ref), [`trial_average`](@ref), ...).
-
-The parameter collections in `src/models/` other than `stp_het.jl` are not loaded by the
-package; see the "SNNUtils models" page of the documentation.
 """
 module SNNUtils
 
@@ -23,12 +20,7 @@ using SNNModels
 using DrWatson
 using Parameters
 using Random
-using Distributions
-using Printf
-using Serialization
-using BSON
 using JSON
-using ThreadTools
 using StatsBase
 using Statistics
 
@@ -48,7 +40,7 @@ include("stimuli/balance_EI/bimodal_kernel.jl")
 ## Integration with BioSeq framework
 include("stimuli/bioseq/import_bioseq.jl")
 
-## Collection of parameters, not included in this version. Move it to SpikingNeuralNetworks.jl
+## Short-term-plasticity parameters sampled from experimental fits
 include("models/stp_het.jl")
 
 ## Functions to analyse the network structure
