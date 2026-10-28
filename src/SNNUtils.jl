@@ -46,6 +46,10 @@ include("models/stp_het.jl")
 ## Functions to analyse the network structure
 include("analysis/weights.jl")
 
+## Spike TIMIT: real speech inputs (submodule, names not exported into SNNUtils)
+include("stimuli/spiketimit/SpikeTimit.jl")
+export SpikeTimit
+
 ## Functions to run machine learning analysis on the network activity
 using MLJ
 include("analysis/classifiers.jl")

@@ -68,4 +68,6 @@ SNNModels.@load_units
             peak_rate = 10Hz, proj_strength = 1.0)
         @test length(stim) == 2
     end
+
+    include(joinpath(@__DIR__, "spiketimit", "test_spiketimit.jl"))
 end
