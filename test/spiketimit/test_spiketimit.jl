@@ -302,6 +302,97 @@ seconds(records) = [(parse(Int, string(a)) / 16000.0, parse(Int, string(b)) / 16
         @test_throws ArgumentError ST._bae_cells(1.0, 1)
     end
 
+    bae1 = read_spiketimes(df.path[1], BAE())
+    coch1 = read_spiketimes(df.path[1], Cochlea(35))
+
+    @testset "resample_spikes!" begin
+        st = deepcopy(bae1)
+        @test resample_spikes!(st; n_feat = 1) === st
+        # reference: the old mapping written as a plain loop
+        function ref_resample(st, n_feat; F = 20, B = 31)
+            nb = ceil(Int, B / n_feat)
+            out = [Float64[] for _ in 1:(nb * F)]
+            for f in 1:F, b in 1:B
+                append!(out[ceil(Int, b / n_feat) + (f - 1) * nb], st[b + (f - 1) * B])
+            end
+            return out
+        end
+        for n_feat in (2, 3, 8, 11)
+            r = resample_spikes!(deepcopy(bae1); n_feat)
+            @test r isa SpikeTrains{Float64}
+            @test length(r) == 20 * ceil(Int, 31 / n_feat)
+            @test r == ref_resample(bae1, n_feat)
+        end
+        # hand example: channel c holds the single spike c
+        lab = [[Float64(c)] for c in 1:620]
+        r = resample_spikes!(lab; n_feat = 8)
+        @test length(r) == 80
+        @test r[1] == 1.0:8.0 && r[4] == 25.0:31.0 && r[5] == 32.0:39.0 && r[80] == 614.0:620.0
+        @test lab == [[Float64(c)] for c in 1:620]          # input not modified
+        # batch
+        batch = [deepcopy(bae1), deepcopy(bae1)]
+        @test resample_spikes!(batch; n_feat = 8) === batch
+        @test length.(batch) == [80, 80] && batch[1] == ref_resample(bae1, 8)
+        # other BAE geometry through the config
+        small = [[Float64(c)] for c in 1:8]
+        @test resample_spikes!(small; n_feat = 2, config = SpikeTimitConfig(bae_frequencies = 2, bae_bins = 4)) ==
+              [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]]
+        @test_throws ArgumentError resample_spikes!(deepcopy(bae1); n_feat = 0)
+        @test_throws ArgumentError resample_spikes!(deepcopy(bae1); n_feat = 12)
+        @test_throws ArgumentError resample_spikes!(deepcopy(coch1); n_feat = 8)
+    end
+
+    @testset "transform_into_bursts!" begin
+        st = deepcopy(bae1)
+        @test transform_into_bursts!(st; rng = MersenneTwister(1)) === st
+        @test all(issorted, st)
+        @test all(all(t in st[c] for t in bae1[c]) for c in eachindex(st))
+        @test all(2 * length(bae1[c]) <= length(st[c]) <= 6 * length(bae1[c]) for c in eachindex(st))
+        @test all(isempty(st[c]) for c in eachindex(st) if isempty(bae1[c]))
+        st2 = transform_into_bursts!(deepcopy(bae1); rng = MersenneTwister(1))
+        @test st2 == st                                         # same seed, same result
+        # one spike per channel: count of added spikes and their minimal delay (4 ms)
+        for inc in (0, 2)
+            xs = [transform_into_bursts!([[1.0], Float64[], [2.0]];
+                                         spikes_per_burst_increase = inc, rng = MersenneTwister(seed))
+                  for seed in 1:50]
+            @test all(x[2] == Float64[] for x in xs)
+            @test all(x[1][1] == 1.0 && all(x[1][2:end] .>= 1.004) for x in xs)
+            @test all(x[3][1] == 2.0 && all(x[3][2:end] .>= 2.004) for x in xs)
+            counts = [length(x[c]) - 1 for x in xs for c in (1, 3)]
+            @test all(1 + inc .<= counts .<= 5 + inc)
+            @test minimum(counts) == 1 + inc                    # most bursts have 2 + inc spikes
+        end
+        # batch: the rng is used sample after sample
+        batch = [deepcopy(bae1), deepcopy(coch1)]
+        @test transform_into_bursts!(batch; rng = MersenneTwister(7)) === batch
+        rng = MersenneTwister(7)
+        @test batch == [transform_into_bursts!(deepcopy(bae1); rng), transform_into_bursts!(deepcopy(coch1); rng)]
+        @test_throws ArgumentError transform_into_bursts!(deepcopy(bae1); spikes_per_burst_increase = -2)
+    end
+
+    @testset "remove_frequencies! / select_frequencies!" begin
+        st = deepcopy(coch1)
+        ref = st[1]
+        @test remove_frequencies!(st; frequencies = [1, 2]) === st
+        @test st[1] == Float64[] && st[2] == Float64[] && st[3:end] == coch1[3:end]
+        @test ref == coch1[1] && st[1] !== ref                  # replaced, old vector untouched
+        st = deepcopy(coch1)
+        @test select_frequencies!(st; frequencies = 3:5) === st
+        @test st[3:5] == coch1[3:5] && all(isempty, st[[1, 2, 6:35...]])
+        batch = [deepcopy(coch1), deepcopy(coch1)]
+        @test remove_frequencies!(batch; frequencies = 1:10) === batch
+        @test all(all(isempty, b[1:10]) && b[11:end] == coch1[11:end] for b in batch)
+        batch = [deepcopy(coch1), deepcopy(coch1)]
+        @test select_frequencies!(batch; frequencies = [2]) === batch
+        @test all(b[2] == coch1[2] && all(isempty, b[[1, 3:35...]]) for b in batch)
+        @test_throws ArgumentError remove_frequencies!(deepcopy(coch1); frequencies = [36])
+        @test_throws ArgumentError remove_frequencies!(deepcopy(coch1); frequencies = 0:1)
+        @test_throws ArgumentError select_frequencies!(deepcopy(coch1); frequencies = [40])
+        @test_throws ArgumentError remove_frequencies!([deepcopy(coch1)]; frequencies = [36])
+        @test_throws ArgumentError select_frequencies!([deepcopy(coch1)]; frequencies = [36])
+    end
+
     @testset "real data (optional)" begin
         if haskey(ENV, "SPIKETIMIT_PATH") && isdir(ENV["SPIKETIMIT_PATH"]) &&
            ENV["SPIKETIMIT_PATH"] != FX.root

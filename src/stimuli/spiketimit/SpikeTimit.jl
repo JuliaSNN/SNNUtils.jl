@@ -43,11 +43,13 @@ export SpikeEncoding, BAE, Cochlea, encoding
 export Phone, Word, Transcription, Transcriptions, SpikeTrains
 export create_dataset, create_dictionary, find_word, count_words
 export read_spiketimes, get_spiketimes
+export resample_spikes!, transform_into_bursts!, select_frequencies!, remove_frequencies!
 
 include("config.jl")
 include("types.jl")
 include("encodings.jl")
 include("dataset.jl")
 include("spikes_io.jl")
+include("process.jl")
 
 end
