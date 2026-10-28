@@ -1,5 +1,5 @@
 # Tests of the submodule SNNUtils.SpikeTimit on a synthetic corpus (see fixture.jl).
-using NPZ, DataFrames, Random
+using MAT, NPZ, DataFrames, Random
 using SNNUtils.SpikeTimit
 include("fixture.jl")
 
@@ -241,11 +241,73 @@ seconds(records) = [(parse(Int, string(a)) / 16000.0, parse(Int, string(b)) / 16
         @test count_words(ws) == Dict("a" => 2, "b" => 1)
     end
 
+    @testset "read_spiketimes / get_spiketimes" begin
+        for (row, s) in zip(eachrow(df), TRAIN_SENTENCES)
+            T = fixture_duration(s)
+            for n in (35, 70)
+                st = read_spiketimes(row.path, Cochlea(n))
+                @test st isa SpikeTrains{Float64}
+                @test st == fixture_spikes(n, T)
+                @test read_spiketimes(row.path, "cochlea$(n)") == st
+            end
+            raw = FX.raw_bae[row.path]
+            bae = read_spiketimes(row.path, BAE())
+            @test bae isa SpikeTrains{Float64} && length(bae) == 620
+            @test bae == [x .* 5.0 for x in raw]
+            @test bae[3] == [0.01 * 5.0]                  # scalar cell
+            @test bae[2] == raw[2] .* 5.0                 # 1 x k row cell
+            @test bae[11] == Float64[]                    # 0 x 0 cell
+            @test read_spiketimes(row.path, "bae") == bae
+            @test read_spiketimes(row.path, BAE(); config = SpikeTimitConfig(correction = 1.0)) == raw
+        end
+        sp = get_spiketimes(df, Cochlea(35))
+        @test sp isa Vector{SpikeTrains{Float64}} && length(sp) == 3
+        @test sp == [read_spiketimes(p, Cochlea(35)) for p in df.path]
+        @test get_spiketimes(; df, encoding = "cochlea35") == sp
+        @test get_spiketimes(df[[3, 1], :], "bae") == [read_spiketimes(df.path[i], BAE()) for i in (3, 1)]
+        @test get_spiketimes(df[1:0, :], Cochlea(35)) == SpikeTrains{Float64}[]
+        @test_throws UndefKeywordError get_spiketimes(; df)
+        # malformed files: ArgumentError naming the file
+        for f in ("x", "y", "u", "v")
+            err = try
+                read_spiketimes(joinpath(FX.bad, f), Cochlea(35))
+            catch e
+                e
+            end
+            @test err isa ArgumentError && occursin(joinpath(FX.bad, f), err.msg)
+        end
+        @test_throws SystemError read_spiketimes(joinpath(FX.bad, "missing"), Cochlea(35))
+        for f in ("z", "w", "s")
+            @test_throws ArgumentError read_spiketimes(joinpath(FX.bad, f), BAE())
+        end
+        # MAT extension guard
+        @test ST._require_mat_ext() === Base.get_extension(SNNUtils, :SNNUtilsMATExt)
+        @test ST._require_mat_ext() isa Module
+        err = try
+            ST._require_mat_ext(nothing)
+        catch e
+            e
+        end
+        @test err isa ErrorException && err.msg == ST.MAT_EXT_MESSAGE
+        @test occursin("using MAT", err.msg)
+        # BAE cells, without MAT
+        @test ST._normalize_bae_cells(Any[0.5, reshape([0.1, 0.2], :, 1), [0.3 0.4], zeros(0, 0), 2], 5.0) ==
+              [[2.5], [0.5, 1.0], [1.5, 2.0], Float64[], [10.0]]
+        @test ST._normalize_bae_cells(Any[], 5.0) == Vector{Float64}[]
+        @test_throws ArgumentError ST._normalize_bae_cells(Any["x"], 5.0)
+        @test_throws ArgumentError ST._normalize_bae_cells(Any[Any[1.0]], 5.0)
+        @test ST._bae_cells(Any[1.0 2.0], 2) == Any[1.0, 2.0]
+        @test_throws ArgumentError ST._bae_cells(Any[1.0 2.0], 3)
+        @test_throws ArgumentError ST._bae_cells(reshape(Any[1.0, 2.0], 2, 1), 2)
+        @test_throws ArgumentError ST._bae_cells(1.0, 1)
+    end
+
     @testset "real data (optional)" begin
         if haskey(ENV, "SPIKETIMIT_PATH") && isdir(ENV["SPIKETIMIT_PATH"]) &&
            ENV["SPIKETIMIT_PATH"] != FX.root
             dfr = create_dataset(; dir = dataset_path("train"))
             @test nrow(dfr) > 0
+            @test length(read_spiketimes(dfr.path[1], BAE())) == 620
         else
             @info "SpikeTimit: SPIKETIMIT_PATH not set, real-data tests skipped"
         end

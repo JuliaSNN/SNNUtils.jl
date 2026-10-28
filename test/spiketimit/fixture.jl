@@ -71,9 +71,47 @@ function _write_records(file, records; trailing_blank::Bool = false)
 end
 
 """
+    cochlea_array(spikes) -> Matrix{Float64}
+
+2 x K array of the cochlea `.npz` files: columns `(t, c - 1)` ordered by channel, then time.
+"""
+cochlea_array(spikes) =
+    reduce(hcat, [[t, Float64(c - 1)] for (c, ch) in enumerate(spikes) for t in ch];
+           init = zeros(2, 0))
+
+"""
+    bae_raw(T) -> Vector{Vector{Float64}}
+
+Raw BAE spike times (time / 5) of a sentence of duration `T` s; channel 3 has one spike.
+"""
+function bae_raw(T::Real)
+    raw = [x ./ 5 for x in fixture_spikes(620, T)]
+    raw[3] = [0.01]
+    return raw
+end
+
+"""
+    bae_cell(raw) -> Matrix{Any}
+
+1 x n MATLAB cell array: `zeros(0, 0)` for empty channels, a scalar for one spike, a k x 1
+column otherwise, except channel 2 stored as a 1 x k row.
+"""
+function bae_cell(raw)
+    cell = Matrix{Any}(undef, 1, length(raw))
+    for (c, x) in enumerate(raw)
+        cell[1, c] = isempty(x) ? zeros(0, 0) :
+                     length(x) == 1 ? x[1] :
+                     c == 2 ? reshape(x, 1, :) : reshape(x, :, 1)
+    end
+    return cell
+end
+
+"""
     make_fixture(root; mat::Bool) -> NamedTuple
 
 Write the synthetic corpus under `root` and return the expected values used by the tests.
+Malformed spike files go to `joinpath(dirname(root), "bad")`, outside the corpus. BAE `.mat`
+files are written only with `mat = true` (requires `using MAT`).
 """
 function make_fixture(root::AbstractString; mat::Bool)
     mkpath(root)
@@ -87,6 +125,32 @@ function make_fixture(root::AbstractString; mat::Bool)
     write(joinpath(root, "train", "dr1", "fabc0", "notes.txt"), "not a sentence\n")
     mkpath(joinpath(root, "DOC"))
     write(joinpath(root, "DOC", "TIMITDIC.TXT"), FIXTURE_DICTIONARY_TEXT)
-    return (root = root, sentences = FIXTURE_SENTENCES, dictionary = FIXTURE_DICTIONARY,
-            fixture_spikes = fixture_spikes, sr = FIXTURE_SR)
+    # spike files
+    raw_bae = Dict{String,Vector{Vector{Float64}}}()
+    for s in FIXTURE_SENTENCES
+        base = joinpath(root, s.path)
+        T = fixture_duration(s)
+        for n in (35, 70)
+            NPZ.npzwrite(base * "_cochlea$(n).npz", Dict("arr_0" => cochlea_array(fixture_spikes(n, T))))
+        end
+        if mat
+            raw_bae[base] = bae_raw(T)
+            MAT.matwrite(base * "_spike_timing.mat", Dict("spike_output" => bae_cell(raw_bae[base])))
+        end
+    end
+    bad = joinpath(dirname(root), "bad")
+    mkpath(bad)
+    NPZ.npzwrite(joinpath(bad, "x_cochlea35.npz"), Dict("arr_0" => zeros(3, 4)))
+    NPZ.npzwrite(joinpath(bad, "y_cochlea35.npz"), Dict("arr_0" => [0.1 0.2; 0.0 35.0]))
+    NPZ.npzwrite(joinpath(bad, "u_cochlea35.npz"), Dict("arr_0" => [0.1 0.2; 0.0 1.5]))
+    NPZ.npzwrite(joinpath(bad, "v_cochlea35.npz"), Dict("other" => [0.1 0.2; 0.0 1.0]))
+    if mat
+        MAT.matwrite(joinpath(bad, "z_spike_timing.mat"), Dict("spike_output" => bae_cell(bae_raw(0.5)[1:10])))
+        MAT.matwrite(joinpath(bad, "w_spike_timing.mat"), Dict("other" => bae_cell(bae_raw(0.5))))
+        cell = bae_cell(bae_raw(0.5))
+        cell[1, 5] = "x"
+        MAT.matwrite(joinpath(bad, "s_spike_timing.mat"), Dict("spike_output" => cell))
+    end
+    return (root = root, bad = bad, sentences = FIXTURE_SENTENCES, dictionary = FIXTURE_DICTIONARY,
+            fixture_spikes = fixture_spikes, sr = FIXTURE_SR, raw_bae = raw_bae)
 end

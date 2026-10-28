@@ -42,10 +42,12 @@ export SpikeTimitConfig, dataset_path
 export SpikeEncoding, BAE, Cochlea, encoding
 export Phone, Word, Transcription, Transcriptions, SpikeTrains
 export create_dataset, create_dictionary, find_word, count_words
+export read_spiketimes, get_spiketimes
 
 include("config.jl")
 include("types.jl")
 include("encodings.jl")
 include("dataset.jl")
+include("spikes_io.jl")
 
 end
