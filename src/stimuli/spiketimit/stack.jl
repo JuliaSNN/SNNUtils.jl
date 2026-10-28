@@ -329,6 +329,13 @@ end
 Return the sorted unique spike times of the spike trains `st` and the channels firing at each
 time; same as `stack_spiketimes([st], [0.0], 0.0, 0.0)`.
 
+# Arguments
+- `st`: spike trains of one sample, one vector of spike times (s) per channel.
+
+# Returns
+- `ft::Vector{Float64}`: unique spike times (s, same unit as the input, not rescaled), ascending.
+- `neurons::Vector{Vector{Int}}`: for each time in `ft`, the channels firing at it, ascending.
+
 # Examples
 ```julia
 using SNNUtils.SpikeTimit

@@ -129,8 +129,8 @@ end
 
 Empty the channels `frequencies` (vector or range of channel indices), in place: each removed
 channel is replaced by a new empty vector (the old vector is not modified). For a batch, the
-same channels are emptied in every sample. Throws an `ArgumentError` for an index outside the
-channels.
+same channels are emptied in every sample. The remaining spike times (s) are not changed.
+Throws an `ArgumentError` for an index outside the channels.
 
 # Examples
 ```julia
@@ -164,7 +164,8 @@ end
 
 Keep only the channels `frequencies` and empty all the others, in place (see
 [`remove_frequencies!`](@ref)). For a batch the complement is taken over the channels of the
-first sample. Throws an `ArgumentError` for an index outside the channels.
+first sample. The remaining spike times (s) are not changed. Throws an `ArgumentError` for an
+index outside the channels.
 
 # Examples
 ```julia

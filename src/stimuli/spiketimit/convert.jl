@@ -29,7 +29,8 @@ end
     spiketime_parameter(seq::NamedTuple{(:ft, :neurons)}; delay::Real = 0.0) -> SNNModels.SpikeTimeStimulusParameter
 
 Build the parameter of an `SNNModels.SpikeTimeStimulus` from SpikeTimit spikes: `Float32` spike
-times in ms, sorted (stable), each with its input neuron (the channel index, 1-based).
+times in ms, sorted by time (the order of equal times is unspecified), each with its input
+neuron (the channel index, 1-based).
 
 # Arguments
 - `st`: spike trains (s) of one sample; neuron `c` fires at the times of `st[c]`.
