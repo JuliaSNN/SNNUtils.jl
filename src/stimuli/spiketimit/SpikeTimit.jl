@@ -44,6 +44,10 @@ export Phone, Word, Transcription, Transcriptions, SpikeTrains
 export create_dataset, create_dictionary, find_word, count_words
 export read_spiketimes, get_spiketimes
 export resample_spikes!, transform_into_bursts!, select_frequencies!, remove_frequencies!
+export word_intervals, get_spikes_in_interval, get_word_spikes, get_word_labels, select_words,
+       get_encoding_dimension
+export stack_spiketimes, stack_labels, mix_inputs, get_ordered_spikes, transcriptions_dt, ft_dt,
+       get_savepoints, matrix2spiketimes, spiketimes2sequence
 
 include("config.jl")
 include("types.jl")
@@ -51,5 +55,7 @@ include("encodings.jl")
 include("dataset.jl")
 include("spikes_io.jl")
 include("process.jl")
+include("extract.jl")
+include("stack.jl")
 
 end
