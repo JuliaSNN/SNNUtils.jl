@@ -623,6 +623,136 @@ seconds(records) = [(parse(Int, string(a)) / 16000.0, parse(Int, string(b)) / 16
         @test spiketimes2sequence(x) == (ft = [0.25, 0.5], neurons = [[1, 2], [1]])
     end
 
+    @testset "to_snn_spiketimes" begin
+        st = deepcopy(bae1)
+        r = to_snn_spiketimes(st)
+        @test r isa SNNModels.Spiketimes && r isa Vector{Vector{Float32}}
+        @test r == [Float32[Float32(t * 1000.0) for t in ch] for ch in bae1]
+        @test st == bae1
+        @test to_snn_spiketimes([[0.5, 0.25]]) == [Float32[500, 250]]          # order kept
+    end
+
+    pairs_of(p) = sort(collect(zip(p.spiketimes, p.neurons)))
+    @testset "spiketime_parameter" begin
+        p = spiketime_parameter(coch1)
+        @test p isa SNNModels.SpikeTimeStimulusParameter{Vector{Float32},Vector{Int}}
+        @test issorted(p.spiketimes)
+        @test pairs_of(p) == sort([(Float32(t * 1000), c) for (c, ch) in enumerate(coch1) for t in ch])
+        o, _ = get_ordered_spikes(wi; silence_time = 0.1, shift = 0.2, ids = [1, 2, 5])
+        p2 = spiketime_parameter(o)
+        @test p2 isa SNNModels.SpikeTimeStimulusParameter{Vector{Float32},Vector{Int}}
+        @test issorted(p2.spiketimes)
+        @test pairs_of(p2) == sort([(Float32(t * 1000), n) for (t, ns) in zip(o.ft, o.neurons) for n in ns])
+        @test pairs_of(spiketime_parameter(spiketimes2sequence(coch1))) == pairs_of(p)
+        @test spiketime_parameter(coch1; delay = 10.0).spiketimes == p.spiketimes .+ 10.0f0
+        @test spiketime_parameter(o; delay = 5).spiketimes == p2.spiketimes .+ 5.0f0
+        @test_throws ArgumentError spiketime_parameter((ft = [0.1], neurons = [[-1]]))
+        @test_throws ArgumentError spiketime_parameter((ft = [0.1], neurons = [[0]]))
+        # smoke test: all spikes are delivered by a SpikeTimeStimulus
+        E = SNNModels.IF(N = 10)
+        stim = SNNModels.SpikeTimeStimulus(E, :ge; param = spiketime_parameter(coch1),
+                                           conn = (p = 1.0, μ = 1.0), N = 35)
+        model = SNNModels.compose(; E, stim, silent = true)
+        SNNModels.sim!(; model, duration = 1000.0f0)
+        @test stim.next_index[1] == -1
+    end
+
+    @testset "ms_intervals / label_intervals" begin
+        t = df.words[3]                                # that, had, that
+        @test ms_intervals(t) == [Float32[Float32(a * 1000), Float32(b * 1000)] for (a, b) in t.intervals]
+        @test ms_intervals(t) isa Vector{Vector{Float32}}
+        that = label_intervals(t, "that")
+        @test that == [Float32[100, 300], Float32[500, 700]]
+        @test that == [Float32[Float32(a * 1000), Float32(b * 1000)] for (a, b) in t.intervals[[1, 3]]]
+        @test label_intervals(t, :that) == that
+        @test label_intervals(t, "absent") == Vector{Float32}[]
+        @test label_intervals(t, "absent") isa Vector{Vector{Float32}}
+    end
+
+    @testset "to_sequence" begin
+        _, trans = get_ordered_spikes(wi; silence_time = 0.1, shift = 0.2, repetitions = 2,
+                                      rng = MersenneTwister(1))
+        seq = to_sequence(trans; tail = 0.3)
+        @test keys(seq) == (:dict, :symbols, :ph_duration, :silence, :sequence, :line_id)
+        @test seq.line_id == (words = 1, phonemes = 2, duration = 3, type = 4, onset = 5, offset = 6)
+        @test seq.silence == :_ && size(seq.sequence, 1) == 6
+        @test seq.symbols.words == [:had, :that]
+        @test seq.symbols.phonemes == [:ae, :d, :dh, :hh, :t]
+        @test seq.dict[:that] == [:dh, :ae, :t]
+        # "had" has 2 phones in fabc0/sa1 and 3 in mdef0/sa1: the first occurrence decides
+        first_had = findfirst(==("had"), trans.words.signs)
+        (h0, h1) = trans.words.intervals[first_had]
+        @test seq.dict[:had] == [Symbol(p) for ((a, b), p) in zip(trans.phones.intervals, trans.phones.signs)
+                                 if a >= h0 && b <= h1]
+        @test seq.dict isa Dict{Symbol,Vector{Symbol}} && seq.ph_duration isa Dict{Symbol,Float32}
+        @test haskey(seq.ph_duration, :_) && all(>(0), values(seq.ph_duration))
+        approx_intervals(a, b) = length(a) == length(b) && all(all(isapprox.(x, y; atol = 1e-3)) for (x, y) in zip(a, b))
+        for w in ("that", "had")
+            @test approx_intervals(SNNUtils.merge_intervals(SNNUtils.sign_intervals(Symbol(w), seq)),
+                                   label_intervals(trans.words, w))
+        end
+        for ph in ("dh", "hh", "t")
+            @test approx_intervals(SNNUtils.merge_intervals(SNNUtils.sign_intervals(Symbol(ph), seq)),
+                                   label_intervals(trans.phones, ph))
+        end
+        @test isapprox(SNNUtils.sequence_end(seq), 1000 * (trans.words.intervals[end][2] + 0.3); atol = 1e-3)
+        @test :w_that in SNNUtils.stimuli_names(seq).words && :p_dh in SNNUtils.stimuli_names(seq).phonemes
+        S = seq.sequence
+        @test S[5, 1] == 0.0f0 && S[6, end] ≈ sum(S[3, :]) && all(S[5, 2:end] .== S[6, 1:(end - 1)])
+        @test all(x -> x isa Float32, S[3, :]) && all(x -> x isa Float32, S[5, :])
+        # type row: one run per presentation, :onset first, :offset last
+        runs = Tuple{Int,Int}[]
+        i = 1
+        while i <= size(S, 2)
+            if S[1, i] != :_
+                j = i
+                while j < size(S, 2) && S[1, j + 1] == S[1, i]
+                    j += 1
+                end
+                push!(runs, (i, j))
+                i = j + 1
+            else
+                i += 1
+            end
+        end
+        @test length(runs) == length(trans.words)
+        @test all(S[4, a] == :onset && S[4, b] == :offset for (a, b) in runs)
+        @test all(S[4, b - 1] == :offset_2 for (a, b) in runs if b - a == 2)   # 3-phone words
+        @test any(b - a == 2 for (a, b) in runs) && any(b - a == 1 for (a, b) in runs)
+        @test all(S[4, i] == :silence for i in axes(S, 2) if S[2, i] == :_)
+        # same word twice with no silence: two presentations
+        _, t2 = get_ordered_spikes(wi; silence_time = 0.0, shift = 0.0, ids = [1, 1])
+        seq2 = to_sequence(t2)
+        @test count(==(:onset), seq2.sequence[4, :]) == 2
+        @test seq2.sequence[1, :] == [:_, :that, :that, :that, :_, :that, :that, :that, :_]
+        @test seq2.sequence[3, 5] == 0.0f0 && seq2.sequence[3, end] == 0.0f0
+        # update_stimuli! accepts the sequence
+        E = SNNModels.IF(N = 10)
+        stim = SNNUtils.step_input(; inputs = SNNUtils.stimuli_names(seq).all, network = (pop = (Exc = E,),),
+                                   sym = :ge, p_post = 0.5, peak_rate = 0.01, proj_strength = 1.0)
+        @test SNNUtils.update_stimuli!(; seq, model = (; stim)) == (; stim)
+        # words with silent gaps between phones
+        tg = (words = Transcription([(0.1, 0.4)], ["w"]),
+              phones = Transcription([(0.15, 0.2), (0.25, 0.3)], ["a", "b"]))
+        sg = to_sequence(tg; tail = 0.05).sequence
+        @test sg[1, :] == [:_, :w, :w, :w, :w, :w, :_]
+        @test sg[2, :] == [:_, :_, :a, :_, :b, :_, :_]
+        @test isapprox(collect(sg[3, :]), Float32[100, 50, 50, 50, 50, 100, 50]; atol = 1e-3)
+        # errors
+        bad(w, p) = (words = Transcription(w, fill("x", length(w))), phones = Transcription(p, fill("p", length(p))))
+        @test_throws ArgumentError to_sequence(bad([(0.0, 0.1)], [(0.05, 0.15)]))              # phone crosses the offset
+        @test_throws ArgumentError to_sequence(bad([(0.0, 0.2), (0.1, 0.3)], NTuple{2,Float64}[])) # overlapping words
+        @test_throws ArgumentError to_sequence(bad([(0.2, 0.3), (0.0, 0.1)], NTuple{2,Float64}[])) # unsorted words
+        @test_throws ArgumentError to_sequence(bad([(0.0, 0.1)], [(0.2, 0.3)]))                # phone after every word
+        @test_throws ArgumentError to_sequence(bad([(0.2, 0.3)], [(0.0, 0.1)]))                # phone before the word
+        @test_throws ArgumentError to_sequence(bad([(0.0, 0.2)], [(0.1, 0.2), (0.0, 0.1)]))    # unsorted phones
+        @test_throws ArgumentError to_sequence(bad([(0.0, 0.1)], NTuple{2,Float64}[]); tail = -1.0)
+        # a word spelled like a phone label: warning
+        tc = (words = Transcription([(0.0, 0.1)], ["ah"]), phones = Transcription([(0.0, 0.1)], ["ah"]))
+        @test_logs (:warn, r"ah") to_sequence(tc)
+        @test to_sequence(Transcriptions{Float64}((Transcription(), Transcription()))).sequence[1, :] == [:_]
+    end
+
     @testset "real data (optional)" begin
         if haskey(ENV, "SPIKETIMIT_PATH") && isdir(ENV["SPIKETIMIT_PATH"]) &&
            ENV["SPIKETIMIT_PATH"] != FX.root

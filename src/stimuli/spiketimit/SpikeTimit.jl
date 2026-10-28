@@ -48,6 +48,7 @@ export word_intervals, get_spikes_in_interval, get_word_spikes, get_word_labels,
        get_encoding_dimension
 export stack_spiketimes, stack_labels, mix_inputs, get_ordered_spikes, transcriptions_dt, ft_dt,
        get_savepoints, matrix2spiketimes, spiketimes2sequence
+export to_snn_spiketimes, spiketime_parameter, label_intervals, ms_intervals, to_sequence
 
 include("config.jl")
 include("types.jl")
@@ -57,5 +58,6 @@ include("spikes_io.jl")
 include("process.jl")
 include("extract.jl")
 include("stack.jl")
+include("convert.jl")
 
 end
