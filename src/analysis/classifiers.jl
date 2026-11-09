@@ -243,7 +243,7 @@ function sym_features(sym::Symbol, pop::T, offsets::Vector) where {T<:AbstractPo
 end
 
 """
-    score_spikes(model, seq, target_interval = :offset; delay = nothing, pop = :Exc)
+    score_spikes(model, seq, target_interval = :offset; delay = nothing, pop = :Exc, window = 100)
 
 Decode which word was presented from the spike counts of the word assemblies and score the
 decoding.
@@ -260,6 +260,11 @@ of `model.pop[pop]` are counted in 10 ms bins over the window `offset_time .+ (0
 - `delay = nothing`: delay (ms) of the decoding window; if `nothing`, the delays `-100:10:100`
   are all tested.
 - `pop = :Exc`: population to decode from.
+- `window = 100`: length (ms) of the counting window, must be positive (`ArgumentError` otherwise).
+
+The spikes are binned over `0:10ms:(maximum(offset_times) + max_delay + window)`, where `max_delay`
+is 100 ms if `delay` is `nothing` and `max(delay, 0)` otherwise, so that the window of the last
+presentation is fully recorded.
 
 # Returns
 - With `delay`: `(score, confusion_matrix, activity_matrix)`, where `score` is Cohen's kappa and
@@ -270,7 +275,15 @@ of `model.pop[pop]` are counted in 10 ms bins over the window `offset_time .+ (0
 The computation is serial. `activity_matrix` is computed for the given `delay`. (Up to SNNUtils
 0.2.9 it accumulated over all the delays tested.)
 """
-function score_spikes(model, seq, target_interval = :offset; delay = nothing, pop = :Exc)
+function score_spikes(
+    model,
+    seq,
+    target_interval = :offset;
+    delay = nothing,
+    pop = :Exc,
+    window = 100,
+)
+    window > 0 || throw(ArgumentError("window must be positive, got $window"))
     ## Get word intervals 
     offsets_ids = findall(seq.sequence[seq.line_id.type, :] .== target_interval)
     words = seq.sequence[seq.line_id.words, offsets_ids]
@@ -297,9 +310,12 @@ function score_spikes(model, seq, target_interval = :offset; delay = nothing, po
     confusion_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
     activity_matrix = zeros(Float32, length(word_assemblies), length(word_assemblies))
     _spikes = spiketimes(model.pop[pop])
-    spike_count, r = bin_spiketimes(_spikes, interval = 0:10ms:(offset_times[end]+100ms))
+    # bin_spiketimes returns the left bin edges r; bins with r < t_end lie inside the window
+    max_delay = isnothing(delay) ? 100ms : max(delay, 0)
+    t_max = maximum(offset_times) + max_delay + window
+    spike_count, r = bin_spiketimes(_spikes, interval = 0:10ms:t_max)
 
-    function _score(delay, test_interval = 0:100)
+    function _score(delay, test_interval = 0:window)
         predicted = Symbol[]
         target = Symbol[]
         fill!(activity_matrix, 0.0f0)
