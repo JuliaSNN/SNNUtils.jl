@@ -68,4 +68,5 @@ SNNModels.@load_units
             peak_rate = 10Hz, proj_strength = 1.0)
         @test length(stim) == 2
     end
+    include("score_spikes_window.jl")
 end
