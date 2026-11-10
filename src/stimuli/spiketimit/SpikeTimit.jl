@@ -22,6 +22,13 @@ Workflow: [`create_dataset`](@ref) -> [`find_word`](@ref) / [`select_words`](@re
   MILLISECONDS, the SNNModels convention.
 - [`transcriptions_dt`](@ref) and [`ft_dt`](@ref) return integer time steps (`dt` in ms).
 
+# [DEPRECATED] Python TIMIT tools
+The Python tools of the former SpikeTimit.jl repository (`TIMIT_loader/`) are not part of SNNUtils
+and are no longer maintained: the pandas DataFrame of the TIMIT sentences and the constant-Q
+(CQT) spectra per word and phone computed with librosa, which fed the spectra example through
+PythonCall. SNNUtils has no replacement for these functions; it reads the spike encodings only.
+The last copy of the tools is the folder `TIMIT_loader/` of the (archived) SpikeTimit.jl repository.
+
 # Relation to SNNUtils sequences
 SNNUtils generates synthetic word/phoneme sequences (`generate_sequence`) and drives stimuli
 locked to their intervals (`sign_intervals`, `update_stimuli!`). [`to_sequence`](@ref) builds a

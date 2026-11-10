@@ -11,7 +11,7 @@ the new name `SpikeTimit`.
   (`spiketime_parameter`, Float32 ms) and SNNUtils sequences (`to_sequence`, `label_intervals`).
   Corpus location from arguments or `ENV["SPIKETIMIT_PATH"]`; constants in `SpikeTimitConfig`.
 - MAT is a weak dependency: the extension `SNNUtilsMATExt` (loaded by `using MAT`) reads the BAE files.
-- The Python TIMIT tools of SpikeTimit.jl (`TIMIT_loader`) are not part of the package (unclear licence); they live with the examples in SNNExamples.
+- **[DEPRECATED] Python TIMIT tools.** The Python tools of SpikeTimit.jl (`TIMIT_loader/`: DataFrame of the TIMIT sentences and librosa CQT spectra per word and phone, used by the spectra example through PythonCall) are not part of SNNUtils and are not maintained (unclear licence); SNNUtils has no replacement for these functions. The last copy is the `TIMIT_loader/` folder of the archived SpikeTimit.jl repository.
 - Fixes with respect to SpikeTimit.jl: dialect parsed from the speaker's parent directory, not from any
   `dr*` component of the absolute path; `ft_dt` keeps all neurons of 3 or more equal time steps and no
   longer mutates its input; `get_word_spikes` requires `encoding` and works with a vector of words;
