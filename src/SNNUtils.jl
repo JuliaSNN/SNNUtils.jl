@@ -8,6 +8,7 @@ Protocols and analysis tools built on SNNModels:
   [`step_input`](@ref), [`update_stimuli!`](@ref), ...);
 - excitation/inhibition balance of dendritic neurons ([`compute_kei`](@ref));
 - import of BioSeq tasks ([`import_bioseq_tasks`](@ref), [`seq_bioseq`](@ref));
+- real speech inputs from Spike TIMIT ([`SpikeTimit`](@ref));
 - short-term-plasticity parameters sampled from experimental fits
   ([`sample_stp_params`](@ref), [`sample_stp_campagnola`](@ref));
 - weight and decoding analysis ([`average_weight_dynamics`](@ref), [`SVCtrain`](@ref),
@@ -45,6 +46,10 @@ include("models/stp_het.jl")
 
 ## Functions to analyse the network structure
 include("analysis/weights.jl")
+
+## Spike TIMIT: real speech inputs (submodule, names not exported into SNNUtils)
+include("stimuli/spiketimit/SpikeTimit.jl")
+export SpikeTimit
 
 ## Functions to run machine learning analysis on the network activity
 using MLJ

@@ -69,4 +69,6 @@ SNNModels.@load_units
         @test length(stim) == 2
     end
     include("score_spikes_window.jl")
+
+    include(joinpath(@__DIR__, "spiketimit", "test_spiketimit.jl"))
 end

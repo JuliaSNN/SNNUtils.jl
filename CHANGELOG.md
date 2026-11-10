@@ -1,5 +1,28 @@
 # SNNUtils changelog
 
+## 1.1.0
+
+New submodule `SNNUtils.SpikeTimit` (`using SNNUtils.SpikeTimit`): reader of the Spike TIMIT corpus,
+migrated from the unregistered SpikeTimit.jl 0.1. No change to the 1.0 API; `SNNUtils` exports only
+the new name `SpikeTimit`.
+
+- Reads TIMIT transcriptions, the dictionary and the BAE (`.mat`) and cochlea (`.npz`) spike files;
+  extracts, post-processes and stacks word inputs; converts them to SNNModels stimuli
+  (`spiketime_parameter`, Float32 ms) and SNNUtils sequences (`to_sequence`, `label_intervals`).
+  Corpus location from arguments or `ENV["SPIKETIMIT_PATH"]`; constants in `SpikeTimitConfig`.
+- MAT is a weak dependency: the extension `SNNUtilsMATExt` (loaded by `using MAT`) reads the BAE files.
+- **[DEPRECATED] Python TIMIT tools.** The Python tools of SpikeTimit.jl (`TIMIT_loader/`: DataFrame of the TIMIT sentences and librosa CQT spectra per word and phone, used by the spectra example through PythonCall) are not part of SNNUtils and are not maintained (unclear licence); SNNUtils has no replacement for these functions. The last copy is the `TIMIT_loader/` folder of the archived SpikeTimit.jl repository.
+- Fixes with respect to SpikeTimit.jl: dialect parsed from the speaker's parent directory, not from any
+  `dr*` component of the absolute path; `ft_dt` keeps all neurons of 3 or more equal time steps and no
+  longer mutates its input; `get_word_spikes` requires `encoding` and works with a vector of words;
+  `get_spikes_in_interval` dispatches on its argument types (single sample + intervals no longer returns
+  garbage); `get_ordered_spikes` without `ids` no longer throws `UndefVarError`.
+- Behaviour changes: `create_dataset` stores `words`/`phones` as `Transcription{Float64}` (`signs`,
+  `intervals`) instead of n x 3 matrices; `select_words` samples sentences without replacement by default
+  (`replace = true` restores the old rule) with an explicit `rng`; `get_ordered_spikes` takes
+  `silence_time` and `shift` in seconds (the `unit` keyword is removed).
+- Remove the old SpikeTimit.jl package from environments that load SNNUtils (name clash).
+
 ## 1.0.1
 
 - `score_spikes` gets a `window = 100` keyword (ms): the counting window is `offset_time .+ (0:window) .+ delay`;

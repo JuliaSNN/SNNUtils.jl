@@ -33,6 +33,8 @@ The package contains functions for:
 - computing the Excitatory-Inhibitory balance and analysing the CompartmentNeuron membrane potential;
 - integrating the SpikingNeuralNetworks.jl with the BioSeq framework;
 - analysing the network connectivity structure;
+- reading real speech inputs (spike trains with word and phone timing) from the Spike TIMIT corpus
+  (submodule `SNNUtils.SpikeTimit`; BAE `.mat` files need `using MAT`);
  running machine learning analysis on the network activity.
 
 
